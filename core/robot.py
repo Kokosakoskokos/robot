@@ -3,12 +3,13 @@
 import time
 import yaml
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from core.hardware import ServoController, CameraInterface, GPSInterface, DisplayInterface
 from subsystems.servos import HexapodController
 from subsystems.vision import VisionSystem
 from subsystems.navigation import NavigationSystem
 from subsystems.display import DisplayManager
+from subsystems.face_tracking import FaceTracker
 from ai.brain import RobotBrain
 from utils.logger import setup_logger
 from utils.tts import TextToSpeech
@@ -40,31 +41,51 @@ class ClankerRobot:
         
         logger.info(f"Initializing Clanker robot (mode: {self.config['mode']})")
         
-        # Initialize hardware interfaces
-        self.servo_controller = ServoController(
-            simulation_mode=is_simulation,
-            pca9685_address=self.config['servos']['pca9685_address']
-        )
+        # Initialize hardware interfaces with error handling
+        try:
+            self.servo_controller = ServoController(
+                simulation_mode=is_simulation,
+                pca9685_address=self.config['servos']['pca9685_address']
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize servo controller: {e}")
+            logger.warning("Reverting to simulation mode for servos")
+            self.servo_controller = ServoController(simulation_mode=True)
         
-        self.camera = CameraInterface(
-            simulation_mode=is_simulation,
-            device_id=self.config['camera']['device_id'],
-            width=self.config['camera']['width'],
-            height=self.config['camera']['height']
-        )
+        try:
+            self.camera = CameraInterface(
+                simulation_mode=is_simulation,
+                device_id=self.config['camera']['device_id'],
+                width=self.config['camera']['width'],
+                height=self.config['camera']['height']
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize camera: {e}")
+            logger.warning("Reverting to simulation mode for camera")
+            self.camera = CameraInterface(simulation_mode=True)
         
-        self.gps = GPSInterface(
-            simulation_mode=is_simulation,
-            port=self.config['gps']['port'],
-            baudrate=self.config['gps']['baudrate']
-        )
+        try:
+            self.gps = GPSInterface(
+                simulation_mode=is_simulation,
+                port=self.config['gps']['port'],
+                baudrate=self.config['gps']['baudrate']
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize GPS: {e}")
+            logger.warning("Reverting to simulation mode for GPS")
+            self.gps = GPSInterface(simulation_mode=True)
         
-        self.display = DisplayInterface(
-            simulation_mode=is_simulation,
-            width=self.config['display']['width'],
-            height=self.config['display']['height'],
-            i2c_address=self.config['display']['i2c_address']
-        )
+        try:
+            self.display = DisplayInterface(
+                simulation_mode=is_simulation,
+                width=self.config['display']['width'],
+                height=self.config['display']['height'],
+                i2c_address=self.config['display']['i2c_address']
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize display: {e}")
+            logger.warning("Reverting to simulation mode for display")
+            self.display = DisplayInterface(simulation_mode=True)
 
         # TTS (Czech by default, can run headless; optional if engines missing)
         tts_cfg = self.config.get("tts", {}) if isinstance(self.config, dict) else {}
@@ -86,6 +107,7 @@ class ClankerRobot:
         self.vision = VisionSystem(self.camera)
         self.navigation = NavigationSystem(self.gps)
         self.display_manager = DisplayManager(self.display)
+        self.face_tracker = FaceTracker(simulation_mode=is_simulation)
         
         # Initialize AI brain
         self.brain = RobotBrain(
@@ -147,45 +169,115 @@ class ClankerRobot:
         }
     
     def update_state(self):
-        """Update robot state from all subsystems."""
-        # Vision
-        frame = self.vision.capture_frame()
-        obstacles = self.vision.detect_obstacles(frame)
-        detections = self.vision.detect_objects(frame)
-        env_info = self.vision.get_environment_info()
-        
-        # Navigation
-        position = self.navigation.get_current_position()
-        nav_info = self.navigation.get_direction_to_target()
-        
-        # Update state
-        self.current_state = {
-            'mode': self.config['mode'],
-            'obstacles': obstacles,
-            'detections': detections,
-            'environment': env_info,
-            'position': position,
-            'navigation_info': nav_info,
-            'navigation_target': self.navigation.target_position,
-            'heading': self.heading,
-            'frame_width': self.config['camera']['width'],
-            'frame_height': self.config['camera']['height'],
-            'current_task': None  # Could be set by behaviors
-        }
+        """Update robot state from all subsystems with error handling."""
+        try:
+            # Vision
+            frame = self.vision.capture_frame()
+            obstacles = self.vision.detect_obstacles(frame) if frame is not None else []
+            detections = self.vision.detect_objects(frame) if frame is not None else []
+            env_info = self.vision.get_environment_info()
+            
+            # Face tracking
+            face_info = {}
+            if frame is not None:
+                faces = self.face_tracker.detect_faces(frame)
+                if faces:
+                    face_info = {
+                        'faces_detected': len(faces),
+                        'largest_face': max(faces, key=lambda f: f['size']),
+                        'face_positions': [f['position'] for f in faces]
+                    }
+            
+            # Navigation
+            position = self.navigation.get_current_position()
+            nav_info = self.navigation.get_direction_to_target()
+            
+            # Update state
+            self.current_state = {
+                'mode': self.config['mode'],
+                'obstacles': obstacles,
+                'detections': detections,
+                'environment': env_info,
+                'face_tracking': face_info,
+                'position': position,
+                'navigation_info': nav_info,
+                'navigation_target': self.navigation.target_position,
+                'heading': self.heading,
+                'frame_width': self.config['camera']['width'],
+                'frame_height': self.config['camera']['height'],
+                'current_task': None  # Could be set by behaviors
+            }
+        except Exception as e:
+            logger.error(f"Error updating robot state: {e}")
+            # Maintain minimal state for recovery
+            self.current_state = {
+                'mode': self.config['mode'],
+                'obstacles': [],
+                'detections': [],
+                'environment': {'error': str(e)},
+                'position': None,
+                'navigation_info': None,
+                'navigation_target': None,
+                'heading': self.heading,
+                'frame_width': self.config['camera']['width'],
+                'frame_height': self.config['camera']['height'],
+                'current_task': None
+            }
     
     def execute_action(self, action: Dict):
-        """Execute an action command from the AI brain."""
+        """Execute an action command from the AI brain with safety checks."""
         action_type = action.get('action', 'idle')
         
         try:
+            # Validate action before execution
+            if not isinstance(action, dict):
+                logger.error(f"Invalid action type: {type(action)}")
+                return
+            
+            # Safety check: prevent dangerous actions in critical situations
+            if self.current_state.get('obstacles', []):
+                # If obstacles detected, limit risky actions
+                if action_type in ['walk_forward', 'turn']:
+                    logger.warning("Obstacles detected, limiting movement action")
+                    if action_type == 'walk_forward':
+                        action['steps'] = min(action.get('steps', 1), 1)
+                    elif action_type == 'turn':
+                        action['angle'] = min(abs(action.get('angle', 0)), 30)
+            
             if action_type == 'walk_forward':
                 steps = action.get('steps', 1)
                 speed = action.get('speed', 0.1)
+                
+                # Sanity checks
+                if not isinstance(steps, (int, float)) or steps < 1:
+                    logger.warning(f"Invalid steps value: {steps}, using default 1")
+                    steps = 1
+                if not isinstance(speed, (int, float)) or speed < 0.05:
+                    logger.warning(f"Invalid speed value: {speed}, using default 0.1")
+                    speed = 0.1
+                
+                # Clamp values
+                steps = max(1, min(10, int(steps)))
+                speed = max(0.05, min(1.0, float(speed)))
+                
                 self.hexapod.walk_forward(steps=steps, speed=speed)
                 
             elif action_type == 'turn':
                 angle = action.get('angle', 0)
                 steps = action.get('steps', 1)
+                
+                # Sanity checks
+                if not isinstance(angle, (int, float)):
+                    logger.warning(f"Invalid angle value: {angle}, using default 0")
+                    angle = 0
+                if not isinstance(steps, (int, float)) or steps < 1:
+                    logger.warning(f"Invalid steps value: {steps}, using default 1")
+                    steps = 1
+                
+                # Clamp values
+                angle = max(-180, min(180, float(angle)))
+                steps = max(1, min(10, int(steps)))
+                
                 self.heading = (self.heading + angle) % 360
                 self.hexapod.turn(angle=angle, steps=steps)
                 
@@ -197,6 +289,15 @@ class ClankerRobot:
                 
             elif action_type == 'wave':
                 leg_id = action.get('leg_id', 0)
+                
+                # Sanity checks
+                if not isinstance(leg_id, (int, float)):
+                    logger.warning(f"Invalid leg_id value: {leg_id}, using default 0")
+                    leg_id = 0
+                
+                # Clamp value
+                leg_id = max(0, min(5, int(leg_id)))
+                
                 self.hexapod.wave_leg(leg_id)
                 
             elif action_type == 'stop':
@@ -215,7 +316,13 @@ class ClankerRobot:
                 logger.warning(f"Unknown action: {action_type}")
                 
         except Exception as e:
-            logger.error(f"Error executing action {action_type}: {e}")
+            logger.error(f"Error executing action {action_type}: {e}", exc_info=True)
+            # Attempt to recover by stopping
+            try:
+                logger.info("Attempting recovery - stopping movement")
+                self.hexapod.sit()
+            except Exception as recovery_error:
+                logger.error(f"Recovery failed: {recovery_error}")
     
     def update_display(self):
         """Update OLED display with current status."""
@@ -245,24 +352,61 @@ class ClankerRobot:
             self.brain.learn()
     
     def start(self):
-        """Start the robot's main loop."""
+        """Start the robot's main loop with comprehensive error handling."""
         logger.info("Starting Clanker robot...")
         self.running = True
         
-        # Stand up
-        self.hexapod.stand()
-        time.sleep(1)
+        # Stand up with error handling
+        try:
+            self.hexapod.stand()
+            time.sleep(1)
+        except Exception as e:
+            logger.error(f"Failed to stand up: {e}")
+            logger.warning("Attempting to continue anyway...")
         
-        # Main loop
+        # Main loop with watchdog
+        last_cycle_time = time.time()
+        watchdog_timeout = 5.0  # seconds
+        
         try:
             while self.running:
-                self.run_cycle()
-                time.sleep(self.config['ai']['decision_interval'])
+                cycle_start = time.time()
+                
+                # Watchdog check
+                if cycle_start - last_cycle_time > watchdog_timeout:
+                    logger.warning(f"Watchdog timeout - cycle took too long ({cycle_start - last_cycle_time:.2f}s)")
+                    last_cycle_time = cycle_start
+                
+                try:
+                    self.run_cycle()
+                    last_cycle_time = time.time()
+                except KeyboardInterrupt:
+                    raise  # Re-raise to be caught by outer handler
+                except Exception as cycle_error:
+                    logger.error(f"Error in cycle: {cycle_error}", exc_info=True)
+                    # Brief pause before attempting recovery
+                    time.sleep(0.5)
+                    # Try to reset to safe state
+                    try:
+                        self.hexapod.sit()
+                    except Exception as recovery_error:
+                        logger.error(f"Cycle recovery failed: {recovery_error}")
+                
+                # Rate limiting
+                elapsed = time.time() - cycle_start
+                sleep_time = max(0, self.config['ai']['decision_interval'] - elapsed)
+                time.sleep(sleep_time)
                 
         except KeyboardInterrupt:
             logger.info("Shutdown requested by user")
         except Exception as e:
-            logger.error(f"Error in main loop: {e}")
+            logger.critical(f"Fatal error in main loop: {e}", exc_info=True)
+            # Attempt emergency shutdown
+            try:
+                self.hexapod.sit()
+                self.camera.release()
+            except Exception as emergency_error:
+                logger.error(f"Emergency shutdown failed: {emergency_error}")
         finally:
             self.shutdown()
     

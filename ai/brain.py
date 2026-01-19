@@ -173,14 +173,19 @@ class RobotBrain:
 
     def think(self, current_state: Dict) -> Dict:
         """
-        Main thinking/decision-making process.
+        Main thinking/decision-making process with enhanced error handling.
         
         Args:
-            current_state: Current state of the robot
+            current_state: Current state of the robot (should be a dict)
             
         Returns:
-            Action commands
+            Action commands (always returns a dict with 'action' key)
         """
+        # Validate input state
+        if not isinstance(current_state, dict):
+            logger.error(f"Invalid state type: {type(current_state)}, expected dict")
+            return {'action': 'stop', 'error': 'invalid_state_type'}
+        
         current_time = time.time()
         
         # Rate limit decisions
@@ -190,14 +195,25 @@ class RobotBrain:
         self.last_decision_time = current_time
         self.performance_metrics['decisions_made'] += 1
         
-        # Store state history
-        state_copy = current_state.copy()
-        state_copy['timestamp'] = current_time
-        self.state_history.append(state_copy)
-        
-        # Keep only recent history
-        if len(self.state_history) > 1000:
-            self.state_history = self.state_history[-1000:]
+        # Store state history with validation
+        try:
+            state_copy = current_state.copy()
+            state_copy['timestamp'] = current_time
+            
+            # Add validation info to state for debugging
+            state_copy['_validation'] = {
+                'timestamp': current_time,
+                'decision_count': self.performance_metrics['decisions_made']
+            }
+            
+            self.state_history.append(state_copy)
+            
+            # Keep only recent history
+            if len(self.state_history) > 1000:
+                self.state_history = self.state_history[-1000:]
+        except Exception as e:
+            logger.error(f"Failed to store state history: {e}")
+            # Continue without history
         
         try:
             # Prefer LLM planner when configured.
@@ -205,27 +221,45 @@ class RobotBrain:
             if llm_action is not None:
                 self.performance_metrics['behaviors_executed'].setdefault("llm", 0)
                 self.performance_metrics['behaviors_executed']["llm"] += 1
-                return llm_action
+                
+                # Validate LLM action
+                validated_action = self._sanitize_action(llm_action)
+                validated_action["behavior"] = "llm"
+                return validated_action
 
             # API-required mode: do NOT fallback to local behaviors.
             if self.llm_required:
+                logger.warning("LLM required but not available, stopping robot")
                 return {"action": "stop", "behavior": "llm", "reason": "llm_unavailable_or_failed"}
 
             # Select and execute behavior
-            action = self.behavior_manager.execute_behavior(current_state)
-            
-            # Track behavior usage
-            current_behavior = self.behavior_manager.current_behavior
-            behavior_name = current_behavior.name if current_behavior else 'unknown'
-            action['behavior'] = behavior_name
-            if behavior_name not in self.performance_metrics['behaviors_executed']:
-                self.performance_metrics['behaviors_executed'][behavior_name] = 0
-            self.performance_metrics['behaviors_executed'][behavior_name] += 1
-            
-            return self._sanitize_action(action)
+            try:
+                action = self.behavior_manager.execute_behavior(current_state)
+                
+                # Track behavior usage
+                current_behavior = self.behavior_manager.current_behavior
+                behavior_name = current_behavior.name if current_behavior else 'unknown'
+                
+                if behavior_name not in self.performance_metrics['behaviors_executed']:
+                    self.performance_metrics['behaviors_executed'][behavior_name] = 0
+                self.performance_metrics['behaviors_executed'][behavior_name] += 1
+                
+                # Validate behavior action
+                if not isinstance(action, dict):
+                    logger.error(f"Behavior {behavior_name} returned invalid action type: {type(action)}")
+                    return {'action': 'stop', 'error': 'invalid_behavior_action', 'behavior': behavior_name}
+                
+                validated_action = self._sanitize_action(action)
+                validated_action['behavior'] = behavior_name
+                return validated_action
+                
+            except Exception as behavior_error:
+                logger.error(f"Behavior execution failed: {behavior_error}", exc_info=True)
+                self.performance_metrics['errors'] += 1
+                return {'action': 'stop', 'error': f'behavior_error: {str(behavior_error)}'}
             
         except Exception as e:
-            logger.error(f"Error in brain.think(): {e}")
+            logger.error(f"Error in brain.think(): {e}", exc_info=True)
             self.performance_metrics['errors'] += 1
             return {'action': 'stop', 'error': str(e)}
     
@@ -233,24 +267,43 @@ class RobotBrain:
         """Learning process - analyze performance and optimize."""
         logger.info("Learning from experience...")
         
-        # Analyze behavior performance
-        behavior_stats = self.behavior_manager.get_behavior_stats()
-        
-        # Find underperforming behaviors
-        for behavior_name, stats in behavior_stats.items():
-            success_rate = stats['success_rate']
-            if success_rate < 0.3 and stats['success_count'] + stats['failure_count'] > 10:
-                logger.warning(f"Behavior {behavior_name} has low success rate: {success_rate:.2%}")
-        
-        # Self-modification: analyze code and find optimizations
-        if self.self_modifier.enabled:
-            try:
-                opportunities = self.self_modifier.find_optimization_opportunities()
-                if opportunities:
-                    logger.info(f"Found {len(opportunities)} optimization opportunities")
-                    # Could automatically apply optimizations here
-            except Exception as e:
-                logger.error(f"Error in learning/self-modification: {e}")
+        try:
+            # Analyze behavior performance
+            behavior_stats = self.behavior_manager.get_behavior_stats()
+            
+            # Find underperforming behaviors
+            for behavior_name, stats in behavior_stats.items():
+                success_rate = stats['success_rate']
+                total_attempts = stats['success_count'] + stats['failure_count']
+                
+                if success_rate < 0.3 and total_attempts > 10:
+                    logger.warning(f"Behavior '{behavior_name}' has low success rate: {success_rate:.2%} ({total_attempts} attempts)")
+                    
+                    # Suggest improvement
+                    if success_rate < 0.1:
+                        logger.warning(f"Behavior '{behavior_name}' may need urgent review or disabling")
+                
+                # Track performance trends
+                if total_attempts > 50 and success_rate > 0.8:
+                    logger.info(f"Behavior '{behavior_name}' performing well: {success_rate:.2%}")
+            
+            # Self-modification: analyze code and find optimizations
+            if self.self_modifier.enabled:
+                try:
+                    opportunities = self.self_modifier.find_optimization_opportunities()
+                    if opportunities:
+                        logger.info(f"Found {len(opportunities)} optimization opportunities")
+                        # Could automatically apply optimizations here
+                        # For safety, we just log them for now
+                        for opp in opportunities[:3]:  # Show first 3
+                            logger.info(f"  - {opp['type']}: {opp['description']}")
+                except Exception as e:
+                    logger.error(f"Error in learning/self-modification: {e}")
+            else:
+                logger.debug("Self-modification disabled, skipping optimization analysis")
+                
+        except Exception as e:
+            logger.error(f"Error in learning process: {e}", exc_info=True)
     
     def self_analyze(self) -> Dict:
         """Perform self-analysis of codebase."""
