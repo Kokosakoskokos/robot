@@ -1,0 +1,80 @@
+# Clanker Robot Configuration
+
+# Operation Mode
+mode: "simulation"  # "simulation" or "hardware"
+
+# Identity
+identity:
+  name: "Clanker"
+  language: "cs"  # primary language for speech/thinking context
+
+# Servo Configuration
+servos:
+  # Hexapod has 6 legs, each with 3 servos (coxa, femur, tibia)
+  # Servo IDs: leg_number * 3 + joint (0=coxa, 1=femur, 2=tibia)
+  # Leg numbering: 0=front-left, 1=front-right, 2=mid-left, 3=mid-right, 4=rear-left, 5=rear-right
+  pca9685_address: 0x40
+  frequency: 50  # Hz
+  min_pulse: 500  # microseconds
+  max_pulse: 2500  # microseconds
+  default_position: 90  # degrees
+  
+  # Leg geometry (in mm)
+  coxa_length: 30
+  femur_length: 60
+  tibia_length: 80
+
+# Camera Configuration
+camera:
+  device_id: 0
+  width: 640
+  height: 480
+  fps: 30
+
+# GPS Configuration
+gps:
+  port: "/dev/ttyUSB0"
+  baudrate: 9600
+  timeout: 1.0
+
+# OLED Display Configuration
+display:
+  width: 128
+  height: 64
+  i2c_address: 0x3C
+
+# AI Configuration
+ai:
+  decision_interval: 0.5  # seconds between AI decisions
+  self_modify_enabled: true
+  behavior_update_interval: 5.0  # seconds between behavior updates
+  learning_rate: 0.1
+  # LLM (OpenRouter) configuration
+  llm:
+    enabled: true
+    # If true, robot decisions REQUIRE the API. If the API fails, Clanker will fail-safe (stop)
+    required: true
+    # Devstral (free tier) example. Change if you use a different model.
+    model: "mistralai/devstral-small:free"
+    # Optional; defaults to https://openrouter.ai/api/v1
+    base_url: "https://openrouter.ai/api/v1"
+    # Optional but recommended for OpenRouter analytics/rate-limits.
+    # site_url: "https://your-site.example"
+    # app_name: "Clanker"
+    # Safety/robustness
+    timeout_s: 20
+    max_retries: 2
+    temperature: 0.2
+
+# Text-to-Speech (TTS)
+tts:
+  language: "cs"           # Czech by default
+  engine_priority: ["pyttsx3", "gtts"]  # Try in this order
+  voice_substring: "cs"    # Try to select Czech voice in pyttsx3
+  playback_timeout_s: 15
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "clanker.log"
+  console: true
