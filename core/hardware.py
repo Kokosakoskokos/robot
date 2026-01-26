@@ -152,26 +152,29 @@ class CameraInterface(HardwareInterface):
             self.simulation_mode = True
     
     def read_frame(self):
-        """Read a frame from the camera with reconnection logic."""
+        """Read a frame from the camera with automatic re-initialization."""
         if self.simulation_mode:
             import numpy as np
             # Return a black frame in simulation
             return np.zeros((self.height, self.width, 3), dtype=np.uint8)
         
+        # If camera was released or failed, try to re-init
         if not self.initialized or self.cap is None:
-            return None
+            self._try_init_hardware()
+            if not self.initialized:
+                return None
         
         try:
             ret, frame = self.cap.read()
             if not ret:
                 logger.warning("Lost camera connection, attempting to reconnect...")
                 self.initialized = False
-                self.cap.release()
-                self._try_init_hardware()
+                if self.cap: self.cap.release()
                 return None
             return frame
         except Exception as e:
             logger.error(f"Failed to read camera frame: {e}")
+            self.initialized = False
             return None
     
     def release(self):
