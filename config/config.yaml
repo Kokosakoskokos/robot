@@ -64,9 +64,9 @@ ai:
 # Text-to-Speech (TTS)
 tts:
   language: "cs"           # Czech by default
-  engine_priority: ["pyttsx3", "gtts"]  # Try in this order
+  engine_priority: ["gtts", "pyttsx3"]  # Try Google first (more reliable)
   voice_substring: "cs"    # Try to select Czech voice in pyttsx3
-  playback_timeout_s: 15
+  playback_timeout_s: 20
 
 # Logging
 logging:

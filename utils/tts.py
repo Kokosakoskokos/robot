@@ -131,13 +131,20 @@ class TextToSpeech:
         if not text:
             return False
 
+        logger.info(f"Attempting to speak: '{text}' (Priority: {self.engine_priority})")
+
         for engine in self.engine_priority:
+            logger.info(f"Trying TTS engine: {engine}")
             if engine == "pyttsx3":
                 if self._speak_pyttsx3(text):
+                    logger.info("pyttsx3 success")
                     return True
             elif engine == "gtts":
                 if self._speak_gtts(text):
+                    logger.info("gTTS success")
                     return True
+            logger.warning(f"Engine {engine} failed, trying next...")
+            
         logger.error("No TTS engine succeeded; speech skipped.")
         return False
 

@@ -2,6 +2,7 @@
 
 import time
 import yaml
+import os
 from pathlib import Path
 from typing import Dict, Optional, Any
 from core.hardware import ServoController, CameraInterface, GPSInterface
@@ -373,6 +374,15 @@ class ClankerRobot:
         logger.info("Starting Clanker robot...")
         self.running = True
         
+        # Try to unmute and set volume on Linux
+        if os.name != 'nt':
+            try:
+                import subprocess
+                subprocess.run(['amixer', 'set', 'Master', '100%'], capture_output=True)
+                subprocess.run(['amixer', 'set', 'PCM', '100%'], capture_output=True)
+            except:
+                pass
+
         # Initial greeting
         greeting = f"Systém {self.name} se zapíná. Jak vám mohu dnes pomoci?"
         logger.info(f"Robot greeting: {greeting}")
