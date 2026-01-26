@@ -367,6 +367,11 @@ class ClankerRobot:
         logger.info("Starting Clanker robot...")
         self.running = True
         
+        # Initial greeting
+        greeting = f"Systém {self.name} se zapíná. Jak vám mohu dnes pomoci?"
+        logger.info(f"Robot greeting: {greeting}")
+        self.tts.speak(greeting)
+        
         if not self._try_stand_up():
             logger.warning("Robot failed to stand up properly.")
 
