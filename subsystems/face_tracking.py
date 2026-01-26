@@ -42,6 +42,153 @@ class FaceTracker:
         
         logger.info("Face tracking system initialized")
 
+    def _load_face_detector(self):
+        """Load face detection cascade classifier."""
+        try:
+            # Use OpenCV's Haar cascade for face detection
+            cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+            if Path(cascade_path).exists():
+                self.face_cascade = cv2.CascadeClassifier(cascade_path)
+                logger.info("Face cascade loaded successfully")
+            else:
+                logger.warning("Face cascade not found, using simulation mode")
+                self.simulation_mode = True
+        except Exception as e:
+            logger.warning(f"Failed to load face detector: {e}")
+            self.simulation_mode = True
+
+    def detect_faces(self, frame: np.ndarray) -> List[Dict]:
+        """
+        Detect faces in frame.
+        """
+        if self.simulation_mode:
+            return self._simulate_detection(frame)
+        
+        if self.face_cascade is None:
+            return []
+        
+        try:
+            # Convert to grayscale for detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            # Detect faces
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30)
+            )
+            
+            # Convert to list of dictionaries
+            face_list = []
+            for (x, y, w, h) in faces:
+                face_list.append({
+                    'position': (int(x + w/2), int(y + h/2)),  # Center point
+                    'bbox': (x, y, w, h),
+                    'size': w * h,
+                    'distance_estimate': self._estimate_distance(w)
+                })
+            
+            self.face_locations = face_list
+            self.last_detection_time = time.time()
+            
+            return face_list
+            
+        except Exception as e:
+            logger.error(f"Error detecting faces: {e}")
+            return []
+
+    def track_person(self, frame: np.ndarray, person_name: Optional[str] = None) -> Dict:
+        """
+        Track specific person by name or detect any person.
+        """
+        faces = self.detect_faces(frame)
+        
+        if not faces:
+            return {
+                'tracking': False,
+                'person_found': False,
+                'position': None,
+                'bbox': None,
+                'confidence': 0.0
+            }
+        
+        # Track largest face as "person"
+        largest_face = max(faces, key=lambda f: f['size'])
+        return {
+            'tracking': True,
+            'person_found': True,
+            'person_name': person_name or 'unknown',
+            'position': largest_face['position'],
+            'bbox': largest_face['bbox'],
+            'distance': largest_face['distance_estimate'],
+            'confidence': 0.6
+        }
+
+    def follow_person(self, frame: np.ndarray, robot_heading: float) -> Optional[Dict]:
+        """
+        Calculate movement to follow detected person.
+        """
+        tracking = self.track_person(frame)
+        
+        if not tracking['person_found']:
+            return None
+        
+        # Get person position
+        person_x, person_y = tracking['position']
+        frame_height, frame_width = frame.shape[:2]
+        center_x = frame_width // 2
+        horizontal_offset = person_x - center_x
+        
+        # Determine action
+        if abs(horizontal_offset) > 50:
+            turn_angle = 15 if horizontal_offset > 0 else -15
+            return {
+                'action': 'turn',
+                'angle': turn_angle,
+                'steps': 1,
+                'reason': f'Follow person: {tracking["person_name"]}'
+            }
+        elif tracking['distance'] and tracking['distance'] > 600:
+            return {
+                'action': 'walk_forward',
+                'steps': 2,
+                'speed': 0.15,
+                'reason': f'Approach {tracking["person_name"]}'
+            }
+        elif tracking['distance'] and tracking['distance'] < 300:
+            return {
+                'action': 'stop',
+                'reason': f'Person {tracking["person_name"]} too close'
+            }
+        
+        return {
+            'action': 'idle',
+            'reason': f'Following {tracking["person_name"]}'
+        }
+
+    def _simulate_detection(self, frame: np.ndarray) -> List[Dict]:
+        """Simulate face detection for testing."""
+        frame_height, frame_width = frame.shape[:2]
+        if np.random.random() < 0.3:
+            x = np.random.randint(50, frame_width - 100)
+            y = np.random.randint(50, frame_height - 100)
+            w = np.random.randint(50, 100)
+            h = int(w * 1.2)
+            return [{
+                'position': (x + w//2, y + h//2),
+                'bbox': (x, y, w, h),
+                'size': w * h,
+                'distance_estimate': self._estimate_distance(w)
+            }]
+        return []
+
+    def _estimate_distance(self, face_width: int) -> float:
+        KNOWN_FACE_WIDTH = 150  # mm
+        FOCAL_LENGTH = 500  # pixels
+        if face_width == 0: return float('inf')
+        return max((KNOWN_FACE_WIDTH * FOCAL_LENGTH) / face_width, 100)
+
     def _load_trained_data(self) -> Dict:
         path = self.data_dir / "labels.json"
         if path.exists():
