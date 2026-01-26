@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 from typing import List, Optional
 
 from utils.logger import setup_logger
@@ -74,13 +75,13 @@ class TextToSpeech:
             logger.warning(f"pyttsx3 speak failed: {e}")
             return False
 
-    # ---- gTTS + playsound ----
+    # ---- gTTS + playback ----
     def _speak_gtts(self, text: str) -> bool:
         try:
             from gtts import gTTS
-            from playsound import playsound
+            import subprocess
         except Exception as e:
-            logger.debug(f"gTTS/playsound unavailable: {e}")
+            logger.debug(f"gTTS or subprocess unavailable: {e}")
             return False
 
         try:
@@ -88,8 +89,25 @@ class TextToSpeech:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                 temp_path = fp.name
                 tts.write_to_fp(fp)
-            playsound(temp_path, block=True)
-            os.unlink(temp_path)
+            
+            # Use system player instead of buggy playsound
+            # mpg123 is standard on Pi, afplay on Mac, start on Windows
+            if os.name == 'nt':
+                os.system(f'start /min "" "{temp_path}"')
+            else:
+                # Try common Linux players
+                for player in ['mpg123', 'play', 'aplay', 'cvlc']:
+                    try:
+                        if subprocess.run(['which', player], capture_output=True).returncode == 0:
+                            subprocess.run([player, temp_path], check=True)
+                            break
+                    except:
+                        continue
+            
+            # Small delay to ensure file isn't locked on delete
+            time.sleep(0.5)
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
             return True
         except Exception as e:
             logger.warning(f"gTTS playback failed: {e}")
