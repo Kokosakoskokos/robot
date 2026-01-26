@@ -1,5 +1,11 @@
 # Clanker - Autonomous Hexapod Robot System
 
+## 🚀 Rychlá instalace (Raspberry Pi)
+Zkopírujte a vložte tento příkaz do terminálu pro kompletní stažení, nastavení systému a knihoven:
+```bash
+git clone https://github.com/Kokosakoskokos/robot && cd robot && sudo apt-get update && sudo apt-get install -y python3-tk portaudio19-dev python3-pyaudio flac libespeak1 python3-opencv i2c-tools mpg123 && python3 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
+```
+
 Clanker is an autonomous hexapod robot system built on Raspberry Pi that combines artificial intelligence, computer vision, hardware control, and navigation capabilities. The entire system is designed to be self-aware and self-modifying, meaning the AI can read and edit its own code, create new behaviors, and optimize its performance over time.
 
 ## Features
