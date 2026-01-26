@@ -1,6 +1,6 @@
 # Core dependencies
 numpy>=1.24.0
-opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
 Pillow>=10.0.0
 
 # Hardware interfaces (optional - install only if using hardware)

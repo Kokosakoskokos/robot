@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from ai.behaviors import BehaviorManager
 from ai.self_modify import SelfModifier
 from ai.openrouter_client import OpenRouterClient, OpenRouterConfig
+from utils.memory import LongTermMemory
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -27,18 +28,12 @@ class RobotBrain:
     ):
         """
         Initialize robot brain.
-        
-        Args:
-            project_root: Root directory for self-modification
-            self_modify_enabled: Whether to enable self-modification
-            llm_config: Optional LLM configuration dict (OpenRouter)
-            robot_name: Identity name the robot should use in prompts/state
-            primary_language: Language preference for reasoning/speech
         """
         load_dotenv()  # load OPENROUTER_API_KEY, etc.
 
         self.behavior_manager = BehaviorManager()
         self.self_modifier = SelfModifier(project_root)
+        self.memory = LongTermMemory()
         self.robot_name = robot_name
         self.primary_language = primary_language
         
@@ -91,6 +86,8 @@ class RobotBrain:
             f"You are {self.robot_name}, an autonomous hexapod robot controller. "
             f"Primary language: {self.primary_language}. "
             "You are a friendly, helpful, and intelligent companion.\n"
+            "You have LONG-TERM MEMORY and can remember previous conversations and people you've met.\n"
+            "Use the 'memory_context' provided to recall facts about the user.\n"
             "You can self-modify code when enabled, create new behaviors, and recover from missing capabilities.\n"
             "If the user just wants to chat, respond naturally and keep them engaged.\n"
             "If the state includes 'voice_command', prioritize fulfilling that user request.\n"
@@ -173,6 +170,7 @@ class RobotBrain:
             "navigation_target": current_state.get("navigation_target"),
             "heading": current_state.get("heading"),
             "voice_command": current_state.get("voice_command"),
+            "memory_context": self.memory.get_recent_context(),
             "environment": current_state.get("environment"),
         }
 
@@ -246,6 +244,15 @@ class RobotBrain:
         
         validated = self._sanitize_action(action)
         validated['behavior'] = source
+
+        # Save to memory if there's speech
+        if 'speech' in validated and validated['speech']:
+            # We try to find the user's voice command from history
+            user_input = "Neznámý povel"
+            if self.state_history:
+                user_input = self.state_history[-1].get('voice_command', 'Akce robota')
+            self.memory.add_interaction(user_input, validated['speech'])
+
         return validated
     
     def learn(self):
