@@ -4,6 +4,7 @@ import threading
 import time
 import os
 import cv2
+import numpy as np
 from PIL import Image, ImageTk
 from core.robot import ClankerRobot
 from utils.logger import setup_logger
@@ -14,7 +15,7 @@ class ClankerGUI:
     def __init__(self, root, robot_instance=None):
         self.root = root
         self.root.title("Clanker Robot Control Panel")
-        self.root.geometry("1100x700")
+        self.root.geometry("1000x650")
         
         # Use provided robot or create new one
         self.robot = robot_instance or ClankerRobot(simulation_mode=True)
@@ -29,16 +30,16 @@ class ClankerGUI:
     def _setup_ui(self):
         # Main Layout: Left (Video) | Right (Controls)
         self.paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        self.paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # --- Left Side: Video ---
         video_side = ttk.Frame(self.paned)
         self.paned.add(video_side, weight=2)
 
-        video_frame = ttk.LabelFrame(video_side, text="Robot Vision", padding="5")
+        video_frame = ttk.LabelFrame(video_side, text="Robot Vision (Live Camera Feed)", padding="5")
         video_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.canvas = tk.Canvas(video_frame, bg="black", width=640, height=480)
+        self.canvas = tk.Canvas(video_frame, bg="#1a1a1a", width=640, height=480)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         # --- Right Side: Controls ---
@@ -48,33 +49,42 @@ class ClankerGUI:
         main_frame = ttk.Frame(control_side, padding="5")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Status Header
-        status_frame = ttk.LabelFrame(main_frame, text="Robot Status", padding="10")
-        status_frame.pack(fill=tk.X, pady=5)
+        # 1. Power Control (MOVED TO TOP)
+        pwr_frame = ttk.LabelFrame(main_frame, text="Power Control", padding="5")
+        pwr_frame.pack(fill=tk.X, pady=2)
+        
+        self.btn_toggle = tk.Button(pwr_frame, text="START ROBOT ENGINE", 
+                                   command=self.toggle_robot, bg="#4CAF50", fg="white", 
+                                   font=("Arial", 10, "bold"), height=2)
+        self.btn_toggle.pack(fill=tk.X, pady=2)
 
-        self.lbl_mode = ttk.Label(status_frame, text="Mode: Unknown")
+        # 2. Status Header
+        status_frame = ttk.LabelFrame(main_frame, text="Robot Status", padding="5")
+        status_frame.pack(fill=tk.X, pady=2)
+
+        self.lbl_mode = ttk.Label(status_frame, text="Mode: Unknown", font=("Arial", 10))
         self.lbl_mode.pack(anchor=tk.W)
 
-        self.lbl_heading = ttk.Label(status_frame, text="Heading: 0°")
+        self.lbl_heading = ttk.Label(status_frame, text="Heading: 0°", font=("Arial", 10))
         self.lbl_heading.pack(anchor=tk.W)
 
-        self.lbl_ai = ttk.Label(status_frame, text="AI: Ready")
+        self.lbl_ai = ttk.Label(status_frame, text="AI Brain: Idle", font=("Arial", 10))
         self.lbl_ai.pack(anchor=tk.W)
 
-        # Command Entry
-        cmd_frame = ttk.LabelFrame(main_frame, text="Manual Command", padding="10")
-        cmd_frame.pack(fill=tk.X, pady=5)
+        # 3. Command Entry
+        cmd_frame = ttk.LabelFrame(main_frame, text="Manual Command (Type instead of speaking)", padding="5")
+        cmd_frame.pack(fill=tk.X, pady=2)
 
         self.ent_cmd = ttk.Entry(cmd_frame, font=("Arial", 11))
-        self.ent_cmd.pack(side=tk.TOP, fill=tk.X, pady=5)
+        self.ent_cmd.pack(side=tk.TOP, fill=tk.X, pady=2)
         self.ent_cmd.bind("<Return>", lambda e: self.send_command())
 
-        btn_send = ttk.Button(cmd_frame, text="Send Command", command=self.send_command)
+        btn_send = ttk.Button(cmd_frame, text="Send to Brain", command=self.send_command)
         btn_send.pack(side=tk.TOP, fill=tk.X)
 
-        # Quick Action Buttons
-        btn_frame = ttk.LabelFrame(main_frame, text="Quick Actions", padding="10")
-        btn_frame.pack(fill=tk.X, pady=5)
+        # 4. Quick Action Buttons (Compact Grid)
+        btn_frame = ttk.LabelFrame(main_frame, text="Quick Actions", padding="5")
+        btn_frame.pack(fill=tk.X, pady=2)
 
         actions = [
             ("Stand", "stand"), ("Sit", "sit"), 
@@ -82,20 +92,24 @@ class ClankerGUI:
             ("Follow Me", "follow_person"), ("Stop", "stop")
         ]
 
-        for name, cmd in actions:
+        for i, (name, cmd) in enumerate(actions):
             btn = ttk.Button(btn_frame, text=name, command=lambda c=cmd: self.execute_quick_action(c))
-            btn.pack(side=tk.TOP, fill=tk.X, pady=2)
+            btn.grid(row=i//2, column=i%2, sticky="ew", padx=2, pady=2)
+        btn_frame.columnconfigure(0, weight=1)
+        btn_frame.columnconfigure(1, weight=1)
 
-        # Log Output
-        log_frame = ttk.LabelFrame(main_frame, text="Logs", padding="10")
-        log_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        # 5. Audio Test
+        audio_frame = ttk.Frame(main_frame)
+        audio_frame.pack(fill=tk.X, pady=2)
+        ttk.Button(audio_frame, text="Test Speaker (Czech)", 
+                   command=lambda: self.robot.tts.speak("Zkouška reproduktoru. Slyšíš mě?")).pack(fill=tk.X)
 
-        self.txt_log = scrolledtext.ScrolledText(log_frame, height=10, font=("Consolas", 9))
+        # 6. Log Output
+        log_frame = ttk.LabelFrame(main_frame, text="Robot Logs", padding="5")
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=2)
+
+        self.txt_log = scrolledtext.ScrolledText(log_frame, height=8, font=("Consolas", 9))
         self.txt_log.pack(fill=tk.BOTH, expand=True)
-
-        # Engine Control
-        self.btn_toggle = ttk.Button(main_frame, text="START ROBOT ENGINE", command=self.toggle_robot)
-        self.btn_toggle.pack(fill=tk.X, pady=10)
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
@@ -105,14 +119,14 @@ class ClankerGUI:
     def toggle_robot(self):
         if not self.running:
             self.running = True
-            self.btn_toggle.config(text="STOP ROBOT ENGINE")
+            self.btn_toggle.config(text="STOP ROBOT ENGINE", bg="#f44336")
             self.robot_thread = threading.Thread(target=self.robot.start, daemon=True)
             self.robot_thread.start()
             self.log("Robot engine started.")
         else:
             self.running = False
             self.robot.running = False
-            self.btn_toggle.config(text="START ROBOT ENGINE")
+            self.btn_toggle.config(text="START ROBOT ENGINE", bg="#4CAF50")
             self.log("Robot engine stopping...")
 
     def send_command(self):
@@ -128,26 +142,29 @@ class ClankerGUI:
 
     def _update_status_loop(self):
         try:
-            self.lbl_mode.config(text=f"Mode: {self.robot.config['mode'].upper()}")
+            mode_str = self.robot.config.get('mode', 'sim').upper()
+            self.lbl_mode.config(text=f"Mode: {mode_str}")
             self.lbl_heading.config(text=f"Heading: {self.robot.heading:.1f}°")
-            self.lbl_ai.config(text=f"AI Brain: {'Active' if self.robot.running else 'Idle'}")
+            self.lbl_ai.config(text=f"AI Brain: {'ACTIVE' if self.robot.running else 'IDLE'}")
         except: pass
         self.root.after(500, self._update_status_loop)
 
     def _update_video_loop(self):
         try:
-            # Capture frame from robot vision
             frame = self.robot.vision.capture_frame()
             
-            # If in simulation and frame is black, add some visual feedback
-            if self.robot.config.get('mode') == 'simulation' and frame is not None:
-                cv2.putText(frame, "SIMULACE AKTIVNI", (200, 240), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-                cv2.putText(frame, "Zrak robota pripraven", (210, 270), 
+            if frame is None:
+                # Create a placeholder if no frame
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            
+            # Visual feedback for simulation
+            if self.robot.config.get('mode') == 'simulation':
+                cv2.putText(frame, "SIMULACE AKTIVNI", (160, 220), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+                cv2.putText(frame, "Pro realnou kameru vypnete --simulation", (140, 260), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
-
-            if frame is not None:
-                # Detect faces for visual overlay
+            else:
+                # Real camera: Detect faces
                 faces = self.robot.face_tracker.detect_faces(frame)
                 for face in faces:
                     x, y, w, h = face['bbox']
@@ -155,19 +172,18 @@ class ClankerGUI:
                     cv2.putText(frame, f"Osoba {int(face['distance_estimate'])}mm", 
                                 (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                # Convert to PIL/Tkinter format
-                cv2_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                img = Image.fromarray(cv2_img)
-                
-                # Resize to fit canvas
-                canvas_width = self.canvas.winfo_width()
-                canvas_height = self.canvas.winfo_height()
-                if canvas_width > 10 and canvas_height > 10:
-                    img = img.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
-                
-                self.photo = ImageTk.PhotoImage(image=img)
-                self.canvas.delete("all") # Clear old items
-                self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
+            # Convert to PIL/Tkinter format
+            cv2_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(cv2_img)
+            
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
+            if canvas_width > 10 and canvas_height > 10:
+                img = img.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+            
+            self.photo = ImageTk.PhotoImage(image=img)
+            self.canvas.delete("all")
+            self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
         except Exception as e:
             logger.debug(f"Video loop error: {e}")
         
