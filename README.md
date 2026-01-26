@@ -9,10 +9,9 @@ Clanker is an autonomous hexapod robot system built on Raspberry Pi that combine
 - **Self-Modifying AI**: Can read, analyze, and modify its own code
 - **Dual Mode Operation**: 
   - Simulation Mode: Test without hardware, all commands print to console
-  - Hardware Mode: Full physical operation with servos, GPS, OLED display
+  - Hardware Mode: Full physical operation with servos, GPS
 - **Modular Architecture**: Independent subsystems with well-defined interfaces
 - **GPS Navigation**: Location tracking and path planning
-- **OLED Display**: Real-time status and information display
 
 ## Project Structure
 
@@ -28,8 +27,7 @@ clanker/
 │   ├── __init__.py
 │   ├── servos.py            # Hexapod servo control
 │   ├── vision.py            # Computer vision module
-│   ├── navigation.py        # GPS and navigation
-│   └── display.py           # OLED display interface
+│   └── navigation.py        # GPS and navigation
 ├── ai/
 │   ├── __init__.py
 │   ├── brain.py             # AI core and decision making

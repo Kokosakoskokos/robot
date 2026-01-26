@@ -13,7 +13,8 @@ servos:
   # Hexapod has 6 legs, each with 3 servos (coxa, femur, tibia)
   # Servo IDs: leg_number * 3 + joint (0=coxa, 1=femur, 2=tibia)
   # Leg numbering: 0=front-left, 1=front-right, 2=mid-left, 3=mid-right, 4=rear-left, 5=rear-right
-  pca9685_address: 0x40
+  pca9685_left_address: 0x41
+  pca9685_right_address: 0x40
   frequency: 50  # Hz
   min_pulse: 500  # microseconds
   max_pulse: 2500  # microseconds
@@ -37,12 +38,6 @@ gps:
   baudrate: 9600
   timeout: 1.0
 
-# OLED Display Configuration
-display:
-  width: 128
-  height: 64
-  i2c_address: 0x3C
-
 # AI Configuration
 ai:
   decision_interval: 0.5  # seconds between AI decisions
@@ -53,9 +48,9 @@ ai:
   llm:
     enabled: true
     # If true, robot decisions REQUIRE the API. If the API fails, Clanker will fail-safe (stop)
-    required: true
+    required: false
     # Devstral (free tier) example. Change if you use a different model.
-    model: "mistralai/devstral-small:free"
+    model: "liquid/lfm-2.5-1.2b-instruct:free"
     # Optional; defaults to https://openrouter.ai/api/v1
     base_url: "https://openrouter.ai/api/v1"
     # Optional but recommended for OpenRouter analytics/rate-limits.

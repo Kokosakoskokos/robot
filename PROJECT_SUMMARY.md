@@ -29,7 +29,6 @@ robot/
 │   ├── servos.py                         # Hexapod locomotion
 │   ├── vision.py                         # Computer vision
 │   ├── navigation.py                     # GPS navigation
-│   ├── display.py                        # OLED display
 │   ├── face_tracking.py                  # Face tracking (NEW!)
 │   └── __init__.py
 ├── utils/                                 # Utilities
@@ -56,7 +55,6 @@ robot/
 - ✅ 18-servo hexapod locomotion
 - ✅ Camera vision (object detection, obstacle avoidance)
 - ✅ GPS navigation
-- ✅ OLED display (128×64)
 - ✅ Text-to-speech (Czech optimized)
 
 ### 3. **AI & Cloud Integration**
@@ -254,7 +252,6 @@ robot.execute_action(action)
 - **Servo response**: < 10ms
 - **Camera capture**: ~50ms
 - **GPS read**: ~100ms
-- **Display update**: ~10ms
 
 ### Power Consumption
 - **Raspberry Pi 4B**: 3-7W
@@ -280,7 +277,6 @@ robot.execute_action(action)
 
 ### Optional
 - GPS Module (for navigation)
-- OLED Display (128×64)
 - Ultrasonic Sensor (for obstacle detection)
 - LED Strip (for visual feedback)
 

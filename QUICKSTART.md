@@ -10,7 +10,7 @@
 2. **For hardware mode (Raspberry Pi), install additional packages:**
    ```bash
    # Uncomment relevant lines in requirements.txt, then:
-   pip install RPi.GPIO adafruit-circuitpython-servokit adafruit-circuitpython-ssd1306 pynmea2 pyserial
+   pip install RPi.GPIO adafruit-circuitpython-servokit pynmea2 pyserial
    ```
 
 ## Running in Simulation Mode
@@ -56,7 +56,6 @@ python examples/autonomous_demo.py
    - 18 servos connected to PCA9685
    - Camera (USB or CSI)
    - GPS module (serial)
-   - OLED display (I2C)
 
 2. **Configure hardware settings in `config/config.yaml`**
 
@@ -68,7 +67,7 @@ python examples/autonomous_demo.py
 ## Project Structure
 
 - `core/` - Core robot systems (hardware abstraction, main controller)
-- `subsystems/` - Individual subsystems (servos, vision, navigation, display)
+- `subsystems/` - Individual subsystems (servos, vision, navigation)
 - `ai/` - AI brain, behaviors, and self-modification system
 - `config/` - Configuration files
 - `utils/` - Utility functions (logging)
@@ -80,7 +79,6 @@ python examples/autonomous_demo.py
 - All servo commands print to console
 - Camera returns black frames
 - GPS returns simulated position
-- Display messages print to console
 - Perfect for development and testing
 
 ### Hardware Mode
@@ -88,7 +86,6 @@ python examples/autonomous_demo.py
 - Real servo control via PCA9685
 - Live camera feed
 - GPS tracking
-- OLED display output
 
 ### Self-Modification
 The AI can analyze and modify its own code:
@@ -109,7 +106,6 @@ Edit `config/config.yaml` to configure:
 - Servo geometry and addresses
 - Camera settings
 - GPS port and baudrate
-- Display settings
 - AI parameters
 
 ## Troubleshooting

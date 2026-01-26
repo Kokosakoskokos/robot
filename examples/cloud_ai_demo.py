@@ -53,7 +53,7 @@ def test_connection():
     # Create OpenRouter client
     cfg = OpenRouterConfig(
         base_url="https://openrouter.ai/api/v1",
-        model="mistralai/devstral-small:free",  # Free model
+        model="liquid/lfm-2.5-1.2b-instruct:free",  # Free model
         timeout_s=20,
         max_retries=2,
         temperature=0.2

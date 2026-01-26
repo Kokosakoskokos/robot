@@ -91,13 +91,20 @@ class RobotBrain:
             f"You are {self.robot_name}, an autonomous hexapod robot controller. "
             f"Primary language: {self.primary_language}. "
             "You can self-modify code when enabled, create new behaviors, and recover from missing capabilities.\n"
+            "If the state includes 'voice_command', prioritize fulfilling that user request.\n"
+            "Include a 'speech' field with a short, natural response in the primary language describing what you are doing.\n"
             "You must output ONLY a single JSON object describing the next action.\n"
             "Allowed actions and fields:\n"
             "- {\"action\":\"walk_forward\",\"steps\":int,\"speed\":float}\n"
             "- {\"action\":\"turn\",\"angle\":float,\"steps\":int}\n"
+            "- {\"action\":\"crab_walk\",\"direction\":\"left\"|\"right\",\"steps\":int}\n"
+            "- {\"action\":\"fist_bump\"}\n"
+            "- {\"action\":\"dance\"}\n"
+            "- {\"action\":\"follow_person\"}\n"
             "- {\"action\":\"stand\"}\n"
             "- {\"action\":\"sit\"}\n"
             "- {\"action\":\"wave\",\"leg_id\":int}\n"
+            "- {\"action\":\"create_behavior\",\"behavior_name\":string,\"code\":string}\n"
             "- {\"action\":\"stop\"}\n"
             "- {\"action\":\"idle\"}\n"
             "Rules:\n"
@@ -112,7 +119,7 @@ class RobotBrain:
         if not isinstance(action, dict):
             return {"action": "stop", "reason": "invalid_action_type"}
 
-        allowed_actions = {"walk_forward", "turn", "stand", "sit", "wave", "stop", "idle", "continue"}
+        allowed_actions = {"walk_forward", "turn", "stand", "sit", "wave", "stop", "idle", "continue", "crab_walk", "fist_bump", "dance", "follow_person", "create_behavior"}
         a = str(action.get("action", "stop"))
         if a not in allowed_actions:
             return {"action": "stop", "reason": "unknown_action"}
@@ -120,8 +127,13 @@ class RobotBrain:
         out: Dict[str, Any] = {"action": a}
         if "reason" in action and isinstance(action["reason"], str):
             out["reason"] = action["reason"][:200]
+        if "speech" in action and isinstance(action["speech"], str):
+            out["speech"] = action["speech"][:200]
 
-        if a == "walk_forward":
+        if a == "create_behavior":
+            out["behavior_name"] = str(action.get("behavior_name", "NewBehavior"))
+            out["code"] = str(action.get("code", ""))
+        elif a == "walk_forward":
             steps = int(action.get("steps", 1))
             speed = float(action.get("speed", 0.1))
             out["steps"] = max(1, min(10, steps))
@@ -130,6 +142,11 @@ class RobotBrain:
             angle = float(action.get("angle", 0.0))
             steps = int(action.get("steps", 1))
             out["angle"] = max(-180.0, min(180.0, angle))
+            out["steps"] = max(1, min(10, steps))
+        elif a == "crab_walk":
+            direction = str(action.get("direction", "left"))
+            steps = int(action.get("steps", 1))
+            out["direction"] = "left" if direction == "left" else "right"
             out["steps"] = max(1, min(10, steps))
         elif a == "wave":
             leg_id = int(action.get("leg_id", 0))
@@ -153,6 +170,7 @@ class RobotBrain:
             "navigation_info": current_state.get("navigation_info"),
             "navigation_target": current_state.get("navigation_target"),
             "heading": current_state.get("heading"),
+            "voice_command": current_state.get("voice_command"),
             "environment": current_state.get("environment"),
         }
 
@@ -172,96 +190,61 @@ class RobotBrain:
             return None
 
     def think(self, current_state: Dict) -> Dict:
-        """
-        Main thinking/decision-making process with enhanced error handling.
+        """Main thinking process divided into logical steps."""
+        if not self._is_state_valid(current_state):
+            return {'action': 'stop', 'error': 'invalid_state'}
         
-        Args:
-            current_state: Current state of the robot (should be a dict)
-            
-        Returns:
-            Action commands (always returns a dict with 'action' key)
-        """
-        # Validate input state
-        if not isinstance(current_state, dict):
-            logger.error(f"Invalid state type: {type(current_state)}, expected dict")
-            return {'action': 'stop', 'error': 'invalid_state_type'}
-        
-        current_time = time.time()
-        
-        # Rate limit decisions
-        if current_time - self.last_decision_time < self.decision_interval:
+        if not self._should_make_decision():
             return {'action': 'continue'}
         
+        self._record_state(current_state)
+        
+        # 1. Try LLM (Cloud AI) first
+        action = self._think_with_llm(current_state)
+        if action:
+            return self._finalize_decision(action, "llm")
+
+        # 2. Safety Fallback if LLM required
+        if self.llm_required:
+            return {"action": "stop", "behavior": "llm", "reason": "llm_unavailable"}
+
+        # 3. Use local behavior manager
+        return self._think_locally(current_state)
+
+    def _is_state_valid(self, state: Any) -> bool:
+        return isinstance(state, dict)
+
+    def _should_make_decision(self) -> bool:
+        current_time = time.time()
+        if current_time - self.last_decision_time < self.decision_interval:
+            return False
         self.last_decision_time = current_time
+        return True
+
+    def _record_state(self, state: Dict):
         self.performance_metrics['decisions_made'] += 1
-        
-        # Store state history with validation
-        try:
-            state_copy = current_state.copy()
-            state_copy['timestamp'] = current_time
-            
-            # Add validation info to state for debugging
-            state_copy['_validation'] = {
-                'timestamp': current_time,
-                'decision_count': self.performance_metrics['decisions_made']
-            }
-            
-            self.state_history.append(state_copy)
-            
-            # Keep only recent history
-            if len(self.state_history) > 1000:
-                self.state_history = self.state_history[-1000:]
-        except Exception as e:
-            logger.error(f"Failed to store state history: {e}")
-            # Continue without history
-        
-        try:
-            # Prefer LLM planner when configured.
-            llm_action = self._think_with_llm(current_state)
-            if llm_action is not None:
-                self.performance_metrics['behaviors_executed'].setdefault("llm", 0)
-                self.performance_metrics['behaviors_executed']["llm"] += 1
-                
-                # Validate LLM action
-                validated_action = self._sanitize_action(llm_action)
-                validated_action["behavior"] = "llm"
-                return validated_action
+        state_copy = state.copy()
+        state_copy['timestamp'] = time.time()
+        self.state_history.append(state_copy)
+        if len(self.state_history) > 1000:
+            self.state_history.pop(0)
 
-            # API-required mode: do NOT fallback to local behaviors.
-            if self.llm_required:
-                logger.warning("LLM required but not available, stopping robot")
-                return {"action": "stop", "behavior": "llm", "reason": "llm_unavailable_or_failed"}
-
-            # Select and execute behavior
-            try:
-                action = self.behavior_manager.execute_behavior(current_state)
-                
-                # Track behavior usage
-                current_behavior = self.behavior_manager.current_behavior
-                behavior_name = current_behavior.name if current_behavior else 'unknown'
-                
-                if behavior_name not in self.performance_metrics['behaviors_executed']:
-                    self.performance_metrics['behaviors_executed'][behavior_name] = 0
-                self.performance_metrics['behaviors_executed'][behavior_name] += 1
-                
-                # Validate behavior action
-                if not isinstance(action, dict):
-                    logger.error(f"Behavior {behavior_name} returned invalid action type: {type(action)}")
-                    return {'action': 'stop', 'error': 'invalid_behavior_action', 'behavior': behavior_name}
-                
-                validated_action = self._sanitize_action(action)
-                validated_action['behavior'] = behavior_name
-                return validated_action
-                
-            except Exception as behavior_error:
-                logger.error(f"Behavior execution failed: {behavior_error}", exc_info=True)
-                self.performance_metrics['errors'] += 1
-                return {'action': 'stop', 'error': f'behavior_error: {str(behavior_error)}'}
-            
+    def _think_locally(self, state: Dict) -> Dict:
+        try:
+            action = self.behavior_manager.execute_behavior(state)
+            behavior_name = self.behavior_manager.current_behavior.name if self.behavior_manager.current_behavior else 'unknown'
+            return self._finalize_decision(action, behavior_name)
         except Exception as e:
-            logger.error(f"Error in brain.think(): {e}", exc_info=True)
-            self.performance_metrics['errors'] += 1
+            logger.error(f"Local behavior failed: {e}")
             return {'action': 'stop', 'error': str(e)}
+
+    def _finalize_decision(self, action: Dict, source: str) -> Dict:
+        self.performance_metrics['behaviors_executed'].setdefault(source, 0)
+        self.performance_metrics['behaviors_executed'][source] += 1
+        
+        validated = self._sanitize_action(action)
+        validated['behavior'] = source
+        return validated
     
     def learn(self):
         """Learning process - analyze performance and optimize."""
