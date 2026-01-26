@@ -123,18 +123,27 @@ class CameraInterface(HardwareInterface):
             self._try_init_hardware()
     
     def _try_init_hardware(self):
-        """Try to initialize camera."""
+        """Try to initialize camera with retry logic."""
         try:
             import cv2
-            self.cap = cv2.VideoCapture(self.device_id)
-            if self.cap.isOpened():
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                self.initialized = True
-                logger.info(f"Camera initialized (device {self.device_id}, {self.width}x{self.height})")
-            else:
-                logger.warning("Camera failed to open, using simulation mode")
-                self.simulation_mode = True
+            import time
+            
+            # Sometimes camera is busy after a restart, try 3 times
+            for attempt in range(3):
+                self.cap = cv2.VideoCapture(self.device_id)
+                if self.cap.isOpened():
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                    self.initialized = True
+                    logger.info(f"Camera initialized (device {self.device_id}, {self.width}x{self.height})")
+                    return
+                
+                logger.warning(f"Camera device {self.device_id} busy (attempt {attempt+1}/3), retrying...")
+                if self.cap: self.cap.release()
+                time.sleep(2)
+            
+            logger.warning("Camera failed to open after retries, using simulation mode")
+            self.simulation_mode = True
         except ImportError:
             logger.warning("OpenCV not available, using simulation mode")
             self.simulation_mode = True
@@ -143,7 +152,7 @@ class CameraInterface(HardwareInterface):
             self.simulation_mode = True
     
     def read_frame(self):
-        """Read a frame from the camera."""
+        """Read a frame from the camera with reconnection logic."""
         if self.simulation_mode:
             import numpy as np
             # Return a black frame in simulation
@@ -154,18 +163,27 @@ class CameraInterface(HardwareInterface):
         
         try:
             ret, frame = self.cap.read()
-            if ret:
-                return frame
-            return None
+            if not ret:
+                logger.warning("Lost camera connection, attempting to reconnect...")
+                self.initialized = False
+                self.cap.release()
+                self._try_init_hardware()
+                return None
+            return frame
         except Exception as e:
             logger.error(f"Failed to read camera frame: {e}")
             return None
     
     def release(self):
-        """Release camera resources."""
+        """Release camera resources safely."""
         if self.cap is not None:
-            self.cap.release()
-            logger.info("Camera released")
+            try:
+                self.cap.release()
+                self.cap = None
+                self.initialized = False
+                logger.info("Camera released successfully")
+            except Exception as e:
+                logger.error(f"Error releasing camera: {e}")
 
 
 class GPSInterface(HardwareInterface):
