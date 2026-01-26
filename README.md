@@ -3,8 +3,49 @@
 ## 🚀 Rychlá instalace (Raspberry Pi)
 Zkopírujte a vložte tento příkaz do terminálu pro kompletní stažení, nastavení systému a knihoven:
 ```bash
-git clone https://github.com/Kokosakoskokos/robot && cd robot && sudo apt-get update && sudo apt-get install -y python3-tk portaudio19-dev python3-pyaudio flac libespeak1 python3-opencv i2c-tools mpg123 && python3 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
+git clone https://github.com/Kokosakoskokos/robot && cd robot && sudo apt-get update && sudo apt-get install -y python3-tk portaudio19-dev python3-pyaudio flac libespeak1 python3-opencv i2c-tools mpg123 libasound2-dev && python3 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
 ```
+
+## 🛠️ Podrobný postup instalace
+
+Pokud chcete instalovat krokově, postupujte takto:
+
+### 1. Klonování repozitáře
+```bash
+git clone https://github.com/Kokosakoskokos/robot
+cd robot
+```
+
+### 2. Instalace systémových balíčků (Linux/Raspberry Pi)
+Tyto balíčky jsou nezbytné pro správné fungování hlasu, kamery a grafického rozhraní:
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-tk portaudio19-dev python3-pyaudio flac libespeak1 python3-opencv i2c-tools mpg123 libasound2-dev
+```
+
+### 3. Příprava Python prostředí
+Vytvořte a aktivujte virtuální prostředí, aby se knihovny nepobily se systémem:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Nastavení AI (OpenRouter)
+Pro fungování mozku robota nastavte svůj API klíč:
+```bash
+export OPENROUTER_API_KEY="VÁŠ_KLÍČ_ZDE"
+```
+
+### 5. Povolení I2C a Kamery
+Spusťte konfiguraci Raspberry Pi:
+```bash
+sudo raspi-config
+```
+V sekci **Interface Options** povolte **I2C** a **Camera**, poté restartujte Pi.
+
+---
 
 Clanker is an autonomous hexapod robot system built on Raspberry Pi that combines artificial intelligence, computer vision, hardware control, and navigation capabilities. The entire system is designed to be self-aware and self-modifying, meaning the AI can read and edit its own code, create new behaviors, and optimize its performance over time.
 
