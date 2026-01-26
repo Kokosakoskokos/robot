@@ -384,12 +384,17 @@ class ClankerRobot:
                 pass
 
         # Initial greeting
-        greeting = f"Systém {self.name} se zapíná. Jak vám mohu dnes pomoci?"
-        logger.info(f"Robot greeting: {greeting}")
-        self.tts.speak(greeting)
+        logger.info(f"Robot starting: Systém {self.name} se zapíná")
+        self.tts.speak(f"Systém {self.name} se zapíná")
         
         if not self._try_stand_up():
             logger.warning("Robot failed to stand up properly.")
+
+        # Wait 10 seconds as requested and then announce ready
+        time.sleep(10)
+        ready_msg = f"Systém {self.name} zapnut"
+        logger.info(f"Robot ready: {ready_msg}")
+        self.tts.speak(ready_msg)
 
         last_cycle_time = time.time()
         watchdog_timeout = 5.0
