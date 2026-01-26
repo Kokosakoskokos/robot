@@ -21,6 +21,10 @@ def main():
                         help='Run test sequence instead of autonomous mode')
     parser.add_argument('--say', type=str, default=None,
                         help='Speak a message (uses TTS language in config), then exit')
+    parser.add_argument('--cmd', type=str, default=None,
+                        help='Execute a specific action command (e.g., dance, fist_bump)')
+    parser.add_argument('--gui', '-g', action='store_true',
+                        help='Start the robot with Graphical User Interface')
     
     args = parser.parse_args()
     
@@ -36,6 +40,21 @@ def main():
 
         if args.say:
             robot.tts.speak(args.say)
+            return
+
+        if args.cmd:
+            logger.info(f"Executing command: {args.cmd}")
+            robot.execute_action({'action': args.cmd})
+            return
+
+        if args.gui:
+            import tkinter as tk
+            from gui import ClankerGUI
+            logger.info("Launching Graphical User Interface...")
+            root = tk.Tk()
+            # Pass existing robot instance to GUI
+            app = ClankerGUI(root, robot_instance=robot)
+            root.mainloop()
             return
         
         if args.test:

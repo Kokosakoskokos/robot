@@ -6,6 +6,7 @@ This module allows the AI to read, analyze, and modify its own code.
 import ast
 import os
 import inspect
+import time
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from utils.logger import setup_logger
@@ -199,15 +200,7 @@ class SelfModifier:
     
     def modify_function(self, filepath: str, function_name: str, new_code: str) -> bool:
         """
-        Modify an existing function.
-        
-        Args:
-            filepath: Path to file relative to project root
-            function_name: Name of function to modify
-            new_code: New function code
-            
-        Returns:
-            True if successful
+        Modify an existing function with improved boundary detection and backup.
         """
         if not self.enabled:
             logger.warning("Self-modification is disabled")
@@ -219,57 +212,72 @@ class SelfModifier:
                 logger.error(f"File not found: {filepath}")
                 return False
             
-            # Read current file
             with open(full_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+                content = f.read()
+                lines = content.splitlines()
             
-            # Parse to find function
-            tree = ast.parse(''.join(lines))
-            function_start = None
-            function_end = None
+            tree = ast.parse(content)
+            target_node = None
             
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name == function_name:
-                    function_start = node.lineno - 1  # Convert to 0-indexed
-                    # Find end of function (simplified)
-                    function_end = function_start + len(node.body) + 1
+                    target_node = node
                     break
             
-            if function_start is None:
+            if target_node is None:
                 logger.error(f"Function {function_name} not found in {filepath}")
                 return False
             
-            # Validate new code
+            # Find end of function more accurately
+            start_line = target_node.lineno - 1
+            end_line = target_node.end_lineno if hasattr(target_node, 'end_lineno') else start_line + len(target_node.body) + 1
+            
+            # Prepare new content
+            new_lines = lines[:start_line] + [new_code] + lines[end_line:]
+            new_content = '\n'.join(new_lines)
+            
+            # Validate final syntax
             try:
-                ast.parse(new_code)
+                ast.parse(new_content)
             except SyntaxError as e:
-                logger.error(f"Invalid Python syntax: {e}")
+                logger.error(f"Modification results in invalid Python syntax: {e}")
                 return False
             
-            # Replace function
-            new_lines = lines[:function_start] + [new_code + '\n'] + lines[function_end:]
-            
-            # Backup original
+            # Backup
             backup_path = full_path.with_suffix('.py.backup')
             with open(backup_path, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+                f.write(content)
             
-            # Write modified file
+            # Write changes
             with open(full_path, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
+                f.write(new_content)
             
             self.modification_history.append({
                 'type': 'modify_function',
                 'file': filepath,
                 'function': function_name,
-                'timestamp': str(Path(__file__).stat().st_mtime)
+                'timestamp': str(time.time())
             })
             
-            logger.info(f"Modified function {function_name} in {filepath}")
+            logger.info(f"Successfully modified function {function_name} in {filepath}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to modify function: {e}")
+            logger.error(f"Failed to modify function: {e}", exc_info=True)
+            return False
+
+    def rollback(self, filepath: str) -> bool:
+        """Rollback a file to its .backup version."""
+        try:
+            full_path = self.project_root / filepath
+            backup_path = full_path.with_suffix('.py.backup')
+            if backup_path.exists():
+                os.replace(backup_path, full_path)
+                logger.info(f"Rolled back {filepath}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Rollback failed for {filepath}: {e}")
             return False
     
     def get_modification_history(self) -> List[Dict]:

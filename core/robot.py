@@ -4,15 +4,15 @@ import time
 import yaml
 from pathlib import Path
 from typing import Dict, Optional, Any
-from core.hardware import ServoController, CameraInterface, GPSInterface, DisplayInterface
+from core.hardware import ServoController, CameraInterface, GPSInterface
 from subsystems.servos import HexapodController
 from subsystems.vision import VisionSystem
 from subsystems.navigation import NavigationSystem
-from subsystems.display import DisplayManager
 from subsystems.face_tracking import FaceTracker
 from ai.brain import RobotBrain
 from utils.logger import setup_logger
 from utils.tts import TextToSpeech
+from utils.stt import SpeechToText
 
 logger = setup_logger(__name__)
 
@@ -45,7 +45,10 @@ class ClankerRobot:
         try:
             self.servo_controller = ServoController(
                 simulation_mode=is_simulation,
-                pca9685_address=self.config['servos']['pca9685_address']
+                addresses={
+                    "left": self.config['servos']['pca9685_left_address'],
+                    "right": self.config['servos']['pca9685_right_address']
+                }
             )
         except Exception as e:
             logger.error(f"Failed to initialize servo controller: {e}")
@@ -74,18 +77,6 @@ class ClankerRobot:
             logger.error(f"Failed to initialize GPS: {e}")
             logger.warning("Reverting to simulation mode for GPS")
             self.gps = GPSInterface(simulation_mode=True)
-        
-        try:
-            self.display = DisplayInterface(
-                simulation_mode=is_simulation,
-                width=self.config['display']['width'],
-                height=self.config['display']['height'],
-                i2c_address=self.config['display']['i2c_address']
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize display: {e}")
-            logger.warning("Reverting to simulation mode for display")
-            self.display = DisplayInterface(simulation_mode=True)
 
         # TTS (Czech by default, can run headless; optional if engines missing)
         tts_cfg = self.config.get("tts", {}) if isinstance(self.config, dict) else {}
@@ -95,6 +86,9 @@ class ClankerRobot:
             voice_substring=tts_cfg.get("voice_substring", "cs"),
             playback_timeout_s=int(tts_cfg.get("playback_timeout_s", 15)),
         )
+        
+        # STT (Czech by default)
+        self.stt = SpeechToText(language="cs-CZ")
         
         # Initialize subsystems
         self.hexapod = HexapodController(
@@ -106,7 +100,6 @@ class ClankerRobot:
         
         self.vision = VisionSystem(self.camera)
         self.navigation = NavigationSystem(self.gps)
-        self.display_manager = DisplayManager(self.display)
         self.face_tracker = FaceTracker(simulation_mode=is_simulation)
         
         # Initialize AI brain
@@ -157,11 +150,6 @@ class ClankerRobot:
                 'port': '/dev/ttyUSB0',
                 'baudrate': 9600
             },
-            'display': {
-                'width': 128,
-                'height': 64,
-                'i2c_address': 0x3C
-            },
             'ai': {
                 'self_modify_enabled': True,
                 'decision_interval': 0.5
@@ -192,6 +180,9 @@ class ClankerRobot:
             position = self.navigation.get_current_position()
             nav_info = self.navigation.get_direction_to_target()
             
+            # Voice command (non-blocking if possible, but here we'll take it from state)
+            voice_cmd = self.stt.listen() if not self.config.get('mode') == 'simulation' else ""
+            
             # Update state
             self.current_state = {
                 'mode': self.config['mode'],
@@ -203,6 +194,7 @@ class ClankerRobot:
                 'navigation_info': nav_info,
                 'navigation_target': self.navigation.target_position,
                 'heading': self.heading,
+                'voice_command': voice_cmd,
                 'frame_width': self.config['camera']['width'],
                 'frame_height': self.config['camera']['height'],
                 'current_task': None  # Could be set by behaviors
@@ -281,6 +273,25 @@ class ClankerRobot:
                 self.heading = (self.heading + angle) % 360
                 self.hexapod.turn(angle=angle, steps=steps)
                 
+            elif action_type == 'crab_walk':
+                direction = action.get('direction', 'left')
+                steps = action.get('steps', 1)
+                self.hexapod.crab_walk(steps=steps, direction=direction)
+
+            elif action_type == 'fist_bump':
+                self.hexapod.fist_bump()
+
+            elif action_type == 'dance':
+                self.hexapod.dance()
+                
+            elif action_type == 'follow_person':
+                # Use face tracker to calculate movement
+                frame = self.vision.capture_frame()
+                if frame is not None:
+                    follow_action = self.face_tracker.follow_person(frame, self.heading)
+                    if follow_action:
+                        self.execute_action(follow_action)
+                
             elif action_type == 'stand':
                 self.hexapod.stand()
                 
@@ -299,6 +310,13 @@ class ClankerRobot:
                 leg_id = max(0, min(5, int(leg_id)))
                 
                 self.hexapod.wave_leg(leg_id)
+
+            elif action_type == 'create_behavior':
+                behavior_name = action.get('behavior_name')
+                code = action.get('code')
+                if behavior_name and code:
+                    logger.info(f"AI creating new behavior: {behavior_name}")
+                    self.brain.create_new_behavior(behavior_name, code)
                 
             elif action_type == 'stop':
                 # Stop movement (legs stay in current position)
@@ -324,15 +342,6 @@ class ClankerRobot:
             except Exception as recovery_error:
                 logger.error(f"Recovery failed: {recovery_error}")
     
-    def update_display(self):
-        """Update OLED display with current status."""
-        status = {
-            'mode': self.config['mode'],
-            'position': self.current_state.get('position'),
-            'activity': self.brain.behavior_manager.current_behavior.name if self.brain.behavior_manager.current_behavior else 'idle'
-        }
-        self.display_manager.show_status(status)
-    
     def run_cycle(self):
         """Run one cycle of the robot's main loop."""
         # Update state
@@ -344,8 +353,10 @@ class ClankerRobot:
         # Execute action
         self.execute_action(action)
         
-        # Update display
-        self.update_display()
+        # Voice feedback
+        if 'speech' in action and action['speech']:
+            logger.info(f"Robot says: {action['speech']}")
+            self.tts.speak(action['speech'])
         
         # Periodic learning
         if self.brain.performance_metrics['decisions_made'] % 100 == 0:
@@ -356,59 +367,67 @@ class ClankerRobot:
         logger.info("Starting Clanker robot...")
         self.running = True
         
-        # Stand up with error handling
-        try:
-            self.hexapod.stand()
-            time.sleep(1)
-        except Exception as e:
-            logger.error(f"Failed to stand up: {e}")
-            logger.warning("Attempting to continue anyway...")
-        
-        # Main loop with watchdog
+        if not self._try_stand_up():
+            logger.warning("Robot failed to stand up properly.")
+
         last_cycle_time = time.time()
-        watchdog_timeout = 5.0  # seconds
+        watchdog_timeout = 5.0
         
         try:
             while self.running:
                 cycle_start = time.time()
-                
-                # Watchdog check
-                if cycle_start - last_cycle_time > watchdog_timeout:
-                    logger.warning(f"Watchdog timeout - cycle took too long ({cycle_start - last_cycle_time:.2f}s)")
-                    last_cycle_time = cycle_start
+                self._check_watchdog(cycle_start, last_cycle_time, watchdog_timeout)
                 
                 try:
                     self.run_cycle()
                     last_cycle_time = time.time()
                 except KeyboardInterrupt:
-                    raise  # Re-raise to be caught by outer handler
+                    raise
                 except Exception as cycle_error:
-                    logger.error(f"Error in cycle: {cycle_error}", exc_info=True)
-                    # Brief pause before attempting recovery
-                    time.sleep(0.5)
-                    # Try to reset to safe state
-                    try:
-                        self.hexapod.sit()
-                    except Exception as recovery_error:
-                        logger.error(f"Cycle recovery failed: {recovery_error}")
+                    self._handle_cycle_error(cycle_error)
                 
-                # Rate limiting
-                elapsed = time.time() - cycle_start
-                sleep_time = max(0, self.config['ai']['decision_interval'] - elapsed)
-                time.sleep(sleep_time)
+                self._sleep_until_next_cycle(cycle_start)
                 
         except KeyboardInterrupt:
             logger.info("Shutdown requested by user")
         except Exception as e:
-            logger.critical(f"Fatal error in main loop: {e}", exc_info=True)
-            # Attempt emergency shutdown
-            try:
-                self.hexapod.sit()
-                self.camera.release()
-            except Exception as emergency_error:
-                logger.error(f"Emergency shutdown failed: {emergency_error}")
+            self._handle_fatal_error(e)
         finally:
             self.shutdown()
+
+    def _try_stand_up(self) -> bool:
+        try:
+            self.hexapod.stand()
+            time.sleep(1)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to stand up: {e}")
+            return False
+
+    def _check_watchdog(self, current, last, timeout):
+        if current - last > timeout:
+            logger.warning(f"Watchdog timeout - cycle took too long ({current - last:.2f}s)")
+
+    def _handle_cycle_error(self, error):
+        logger.error(f"Error in cycle: {error}", exc_info=True)
+        time.sleep(0.5)
+        try:
+            self.hexapod.sit()
+        except:
+            pass
+
+    def _handle_fatal_error(self, error):
+        logger.critical(f"Fatal error in main loop: {error}", exc_info=True)
+        try:
+            self.hexapod.sit()
+            self.camera.release()
+        except:
+            pass
+
+    def _sleep_until_next_cycle(self, start_time):
+        elapsed = time.time() - start_time
+        sleep_time = max(0, self.config['ai']['decision_interval'] - elapsed)
+        time.sleep(sleep_time)
     
     def shutdown(self):
         """Shutdown the robot safely."""
@@ -421,7 +440,6 @@ class ClankerRobot:
         
         # Release resources
         self.camera.release()
-        self.display_manager.clear()
         
         logger.info("Shutdown complete")
     

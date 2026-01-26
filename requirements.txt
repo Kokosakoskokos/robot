@@ -4,10 +4,10 @@ opencv-python>=4.8.0
 Pillow>=10.0.0
 
 # Hardware interfaces (optional - install only if using hardware)
-# RPi.GPIO>=0.7.1  # Uncomment for Raspberry Pi GPIO
-# adafruit-circuitpython-servokit>=1.3.0  # Uncomment for servo control
-# adafruit-circuitpython-ssd1306>=2.12.0  # Uncomment for OLED display
-# pynmea2>=1.19.0  # Uncomment for GPS parsing
+RPi.GPIO>=0.7.1  # Uncommented for Raspberry Pi GPIO
+adafruit-circuitpython-servokit>=1.3.0  # Uncommented for servo control
+pynmea2>=1.19.0  # Uncommented for GPS parsing
+pyserial>=3.5    # Added for GPS serial communication
 
 # AI and ML
 scikit-learn>=1.3.0
@@ -22,5 +22,7 @@ requests>=2.31.0
 pyttsx3>=2.90
 gTTS>=2.4.0
 playsound>=1.3.0
+SpeechRecognition>=3.10.0
+PyAudio>=0.2.13
 
 # Note: Python's `ast` is part of the standard library (no pip install needed).

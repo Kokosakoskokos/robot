@@ -35,9 +35,17 @@ class Leg:
         self.tibia_length = tibia_length
         
         # Servo IDs: leg_id * 3 + joint (0=coxa, 1=femur, 2=tibia)
-        self.coxa_servo = leg_id * 3 + 0
-        self.femur_servo = leg_id * 3 + 1
-        self.tibia_servo = leg_id * 3 + 2
+        # Mapping for two controllers:
+        # Left legs (0, 2, 4) -> IDs 0-8 on controller 0x41
+        # Right legs (1, 3, 5) -> IDs 16-24 on controller 0x40 (using 16+ as offset)
+        if leg_id % 2 == 0:  # Left legs
+            base_id = (leg_id // 2) * 3
+        else:                # Right legs
+            base_id = 16 + (leg_id // 2) * 3
+            
+        self.coxa_servo = base_id + 0
+        self.femur_servo = base_id + 1
+        self.tibia_servo = base_id + 2
         
         # Current angles
         self.coxa_angle = 90.0
@@ -92,10 +100,15 @@ class Leg:
         cos_tibia = max(-1, min(1, cos_tibia))  # Clamp to valid range
         tibia_angle = 180 - math.degrees(math.acos(cos_tibia))
         
-        # Convert to servo angles (assuming servos are centered at 90 degrees)
+        # Convert to servo angles
+        # Coxa: 90 is center
         coxa_servo_angle = 90 + coxa_angle
+        # Femur: 90 is horizontal
         femur_servo_angle = 90 - femur_angle
-        tibia_servo_angle = 90 - tibia_angle
+        # Tibia: 90 is perpendicular (90 deg to femur)
+        # If tibia_angle (from 180-beta) is 90, servo is 90. 
+        # If tibia_angle is 0 (beta=180, flat), servo is 180.
+        tibia_servo_angle = 180 - tibia_angle
         
         return (coxa_servo_angle, femur_servo_angle, tibia_servo_angle)
     
@@ -206,21 +219,106 @@ class HexapodController:
             
             time.sleep(speed)
     
-    def turn(self, angle: float, steps: int = 1, speed: float = 0.1):
-        """
-        Turn the robot.
+    def crab_walk(self, steps: int = 1, direction: str = "left", speed: float = 0.1):
+        """Walk sideways."""
+        logger.info(f"Crab walking {direction} {steps} steps...")
+        y_step = 30 if direction == "left" else -30
         
-        Args:
-            angle: Turn angle in degrees (positive = left, negative = right)
-            steps: Number of steps
-            speed: Speed of movement
-        """
-        logger.info(f"Turning {angle} degrees...")
-        # Simplified turning - rotate legs around body center
-        # This is a simplified implementation
+        tripod1 = [0, 3, 4]
+        tripod2 = [1, 2, 5]
+        
         for step in range(steps):
-            # Similar to walk_forward but with rotation
-            # Implementation would calculate rotated positions
+            # Phase 1: Lift tripod1, shift tripod2
+            for leg_id in tripod1:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y, self.lift_height)
+            for leg_id in tripod2:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y + y_step, self.stance_height)
+            time.sleep(speed)
+            
+            # Phase 2: Lower tripod1, lift tripod2
+            for leg_id in tripod1:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y + y_step, self.stance_height)
+            for leg_id in tripod2:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y, self.lift_height)
+            time.sleep(speed)
+            
+            # Phase 3: Lower tripod2
+            for leg_id in tripod2:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y, self.stance_height)
+            time.sleep(speed)
+
+    def fist_bump(self):
+        """Perform a fist bump with the front-right leg (leg 1)."""
+        logger.info("Fist bump!")
+        leg = self.legs[1]
+        x, y = self.leg_positions[1]
+        
+        # Lift and move forward
+        leg.move_to(x + 40, y, 20)
+        time.sleep(0.5)
+        # Bump forward
+        leg.move_to(x + 60, y, 20)
+        time.sleep(0.3)
+        # Retract
+        leg.move_to(x + 40, y, 20)
+        time.sleep(0.5)
+        # Back to ground
+        leg.move_to(x, y, self.stance_height)
+
+    def dance(self):
+        """A simple happy dance."""
+        logger.info("Dancing!")
+        for _ in range(3):
+            # Tilt left
+            for i in [0, 2, 4]: self.legs[i].move_to(*self.leg_positions[i], -30)
+            for i in [1, 3, 5]: self.legs[i].move_to(*self.leg_positions[i], -70)
+            time.sleep(0.3)
+            # Tilt right
+            for i in [0, 2, 4]: self.legs[i].move_to(*self.leg_positions[i], -70)
+            for i in [1, 3, 5]: self.legs[i].move_to(*self.leg_positions[i], -30)
+            time.sleep(0.3)
+        self.stand()
+
+    def turn(self, angle: float, steps: int = 1, speed: float = 0.1):
+        """Improved turning logic."""
+        logger.info(f"Turning {angle} degrees...")
+        # Positive = Left, Negative = Right
+        tripod1 = [0, 3, 4]
+        tripod2 = [1, 2, 5]
+        
+        rotation = math.radians(angle / steps)
+        
+        for step in range(steps):
+            # Phase 1: Lift tripod1
+            for leg_id in tripod1:
+                x, y = self.leg_positions[leg_id]
+                # Rotate coordinates
+                new_x = x * math.cos(rotation) - y * math.sin(rotation)
+                new_y = x * math.sin(rotation) + y * math.cos(rotation)
+                self.legs[leg_id].move_to(new_x, new_y, self.lift_height)
+            time.sleep(speed)
+            
+            # Phase 2: Lower tripod1, lift tripod2
+            for leg_id in tripod1:
+                x, y = self.leg_positions[leg_id]
+                new_x = x * math.cos(rotation) - y * math.sin(rotation)
+                new_y = x * math.sin(rotation) + y * math.cos(rotation)
+                self.legs[leg_id].move_to(new_x, new_y, self.stance_height)
+            
+            for leg_id in tripod2:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y, self.lift_height)
+            time.sleep(speed)
+            
+            # Phase 3: Lower tripod2
+            for leg_id in tripod2:
+                x, y = self.leg_positions[leg_id]
+                self.legs[leg_id].move_to(x, y, self.stance_height)
             time.sleep(speed)
     
     def wave_leg(self, leg_id: int):
