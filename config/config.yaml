@@ -1,7 +1,7 @@
 # Clanker Robot Configuration
 
 # Operation Mode
-mode: "simulation"  # "simulation" or "hardware"
+mode: "hardware"  # "simulation" or "hardware"
 
 # Identity
 identity:

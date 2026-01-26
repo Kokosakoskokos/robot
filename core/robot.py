@@ -34,9 +34,8 @@ class ClankerRobot:
         self.name = self.config.get("identity", {}).get("name", "Clanker")
         self.primary_language = self.config.get("identity", {}).get("language", "cs")
         
-        # Override mode if specified
-        if simulation_mode:
-            self.config['mode'] = 'simulation'
+        # Override mode based on flag (True=simulation, False=hardware)
+        self.config['mode'] = 'simulation' if simulation_mode else 'hardware'
         
         is_simulation = self.config['mode'] == 'simulation'
         
