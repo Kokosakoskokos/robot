@@ -88,7 +88,11 @@ class ClankerRobot:
         )
         
         # STT (Czech by default)
-        self.stt = SpeechToText(language="cs-CZ")
+        try:
+            self.stt = SpeechToText(language="cs-CZ")
+        except Exception as e:
+            logger.warning(f"STT initialization failed: {e}")
+            self.stt = None
         
         # Initialize subsystems
         self.hexapod = HexapodController(
@@ -181,7 +185,9 @@ class ClankerRobot:
             nav_info = self.navigation.get_direction_to_target()
             
             # Voice command (non-blocking if possible, but here we'll take it from state)
-            voice_cmd = self.stt.listen() if not self.config.get('mode') == 'simulation' else ""
+            voice_cmd = ""
+            if self.stt and not self.config.get('mode') == 'simulation':
+                voice_cmd = self.stt.listen()
             
             # Update state
             self.current_state = {
