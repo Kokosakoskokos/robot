@@ -171,6 +171,13 @@ class ClankerGUI:
                     cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                     cv2.putText(frame, f"Osoba {int(face['distance_estimate'])}mm", 
                                 (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                # Detect and draw bodies
+                bodies = self.robot.vision.detect_bodies(frame)
+                for body in bodies:
+                    x, y, w, h = body['bbox']
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                    cv2.putText(frame, "Postava", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
             # Convert to PIL/Tkinter format
             cv2_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

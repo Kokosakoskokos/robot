@@ -167,6 +167,7 @@ class ClankerRobot:
             frame = self.vision.capture_frame()
             obstacles = self.vision.detect_obstacles(frame) if frame is not None else []
             detections = self.vision.detect_objects(frame) if frame is not None else []
+            bodies = self.vision.detect_bodies(frame) if frame is not None else []
             env_info = self.vision.get_environment_info()
             
             # Face tracking
@@ -194,6 +195,7 @@ class ClankerRobot:
                 'mode': self.config['mode'],
                 'obstacles': obstacles,
                 'detections': detections,
+                'bodies': bodies,
                 'environment': env_info,
                 'face_tracking': face_info,
                 'position': position,

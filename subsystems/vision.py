@@ -14,15 +14,47 @@ class VisionSystem:
     def __init__(self, camera: CameraInterface):
         """
         Initialize vision system.
-        
-        Args:
-            camera: Camera interface instance
         """
         self.camera = camera
         self.frame_count = 0
         self.detection_history: List[Dict] = []
         
+        # Initialize body detector
+        try:
+            import cv2
+            self.hog = cv2.HOGDescriptor()
+            self.hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+            logger.info("Body detector initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize body detector: {e}")
+            self.hog = None
+        
         logger.info("Vision system initialized")
+
+    def detect_bodies(self, frame: np.ndarray) -> List[Dict]:
+        """Detect full bodies in the frame."""
+        if self.hog is None or frame is None:
+            return []
+        
+        try:
+            import cv2
+            # Resize for faster processing
+            small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+            # Detect people
+            (rects, weights) = self.hog.detectMultiScale(small_frame, winStride=(4, 4), padding=(8, 8), scale=1.05)
+            
+            bodies = []
+            for i, (x, y, w, h) in enumerate(rects):
+                # Scale back coordinates
+                bodies.append({
+                    'bbox': (x*2, y*2, w*2, h*2),
+                    'confidence': weights[i],
+                    'center': (int(x*2 + w), int(y*2 + h))
+                })
+            return bodies
+        except Exception as e:
+            logger.error(f"Body detection error: {e}")
+            return []
     
     def capture_frame(self) -> Optional[np.ndarray]:
         """Capture a frame from the camera."""
