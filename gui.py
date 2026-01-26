@@ -138,13 +138,21 @@ class ClankerGUI:
         try:
             # Capture frame from robot vision
             frame = self.robot.vision.capture_frame()
+            
+            # If in simulation and frame is black, add some visual feedback
+            if self.robot.config.get('mode') == 'simulation' and frame is not None:
+                cv2.putText(frame, "SIMULACE AKTIVNI", (200, 240), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                cv2.putText(frame, "Zrak robota pripraven", (210, 270), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1)
+
             if frame is not None:
                 # Detect faces for visual overlay
                 faces = self.robot.face_tracker.detect_faces(frame)
                 for face in faces:
                     x, y, w, h = face['bbox']
                     cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                    cv2.putText(frame, f"Person {int(face['distance_estimate'])}mm", 
+                    cv2.putText(frame, f"Osoba {int(face['distance_estimate'])}mm", 
                                 (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
                 # Convert to PIL/Tkinter format
@@ -154,10 +162,11 @@ class ClankerGUI:
                 # Resize to fit canvas
                 canvas_width = self.canvas.winfo_width()
                 canvas_height = self.canvas.winfo_height()
-                if canvas_width > 1 and canvas_height > 1:
+                if canvas_width > 10 and canvas_height > 10:
                     img = img.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
                 
                 self.photo = ImageTk.PhotoImage(image=img)
+                self.canvas.delete("all") # Clear old items
                 self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
         except Exception as e:
             logger.debug(f"Video loop error: {e}")

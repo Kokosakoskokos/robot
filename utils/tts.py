@@ -50,15 +50,26 @@ class TextToSpeech:
             return False
 
         try:
-            engine = pyttsx3.init()
+            # On Windows, sapi5 is usually best. On Linux, espeak.
+            driver = "sapi5" if os.name == "nt" else "espeak"
+            engine = pyttsx3.init(driver)
+            
+            # Set rate and volume
+            engine.setProperty('rate', 150)
+            engine.setProperty('volume', 1.0)
+
             if self.voice_substring:
-                for voice in engine.getProperty("voices"):
-                    if self.voice_substring.lower() in (voice.name or "").lower():
+                voices = engine.getProperty("voices")
+                for voice in voices:
+                    # Check if voice supports Czech
+                    if self.voice_substring.lower() in (voice.name or "").lower() or \
+                       (hasattr(voice, 'languages') and any(self.voice_substring.lower() in str(lang).lower() for lang in voice.languages)):
                         engine.setProperty("voice", voice.id)
                         self._pyttsx3_voice = voice.id
                         break
+            
             self._pyttsx3_engine = engine
-            logger.info(f"pyttsx3 initialized; voice={self._pyttsx3_voice or 'default'}")
+            logger.info(f"pyttsx3 initialized (driver={driver}); voice={self._pyttsx3_voice or 'default'}")
             return True
         except Exception as e:
             logger.warning(f"Failed to init pyttsx3: {e}")
