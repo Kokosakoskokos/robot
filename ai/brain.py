@@ -227,6 +227,8 @@ class RobotBrain:
             parsed = json.loads(content.strip())
             action = self._sanitize_action(parsed)
             action["behavior"] = "llm"
+            if 'speech' in action:
+                logger.info(f"AI Brain responded with speech: {action['speech']}")
             return action
         except Exception as e:
             error_msg = str(e)

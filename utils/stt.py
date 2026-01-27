@@ -18,34 +18,40 @@ def suppress_alsa_errors():
             pass
 
 class SpeechToText:
-    """Handles microphone input and converts it to text."""
+    """Handles microphone input in the background."""
     
     def __init__(self, language: str = "cs-CZ"):
         suppress_alsa_errors()
         self.language = language
         self.recognizer = sr.Recognizer()
         self.microphone = None
+        self.last_command = ""
         
         try:
             self.microphone = sr.Microphone()
-            logger.info(f"Speech recognition initialized (lang={language})")
+            with self.microphone as source:
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            
+            # Start background listening
+            self.stop_listening = self.recognizer.listen_in_background(self.microphone, self._callback)
+            logger.info(f"Background STT initialized (lang={language})")
         except Exception as e:
             logger.warning(f"Microphone not available: {e}")
 
-    def listen(self) -> str:
-        """Listens for a command and returns it as text."""
-        if not self.microphone:
-            return ""
-            
+    def _callback(self, recognizer, audio):
+        """Called by background thread when audio is captured."""
         try:
-            with self.microphone as source:
-                # Adjust for noise briefly
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                logger.info("Listening for voice command...")
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
-                text = self.recognizer.recognize_google(audio, language=self.language)
-                logger.info(f"Recognized: {text}")
-                return text.lower()
-        except Exception:
-            return ""
+            text = recognizer.recognize_google(audio, language=self.language)
+            logger.info(f"Recognized: {text}")
+            self.last_command = text.lower()
+        except sr.UnknownValueError:
+            pass
+        except Exception as e:
+            logger.debug(f"STT Error: {e}")
+
+    def listen(self) -> str:
+        """Returns the last recognized command and clears it."""
+        cmd = self.last_command
+        self.last_command = ""
+        return cmd
 
