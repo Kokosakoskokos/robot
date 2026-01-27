@@ -29,7 +29,16 @@ class RobotBrain:
         """
         Initialize robot brain.
         """
-        load_dotenv()  # load OPENROUTER_API_KEY, etc.
+        # Load .env file explicitly from project root
+        dotenv_path = Path(project_root) / ".env"
+        load_dotenv(dotenv_path=dotenv_path)
+        
+        # DEBUG: Check if key is loaded (only show first few chars)
+        test_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("EDENAI_API_KEY")
+        if test_key:
+            logger.info(f"API Key successfully detected (starts with {test_key[:8]}...)")
+        else:
+            logger.warning("NO API KEY DETECTED in environment or .env file!")
 
         self.behavior_manager = BehaviorManager()
         self.self_modifier = SelfModifier(project_root)
