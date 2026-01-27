@@ -79,15 +79,17 @@ class ClankerRobot:
             self.gps = GPSInterface(simulation_mode=True)
 
         # TTS (Czech by default, can run headless; optional if engines missing)
+        logger.info("Initializing Voice Output (TTS)...")
         tts_cfg = self.config.get("tts", {}) if isinstance(self.config, dict) else {}
         self.tts = TextToSpeech(
             language=tts_cfg.get("language", "cs"),
-            engine_priority=tts_cfg.get("engine_priority", ["pyttsx3", "gtts"]),
+            engine_priority=tts_cfg.get("engine_priority", ["gtts", "pyttsx3"]),
             voice_substring=tts_cfg.get("voice_substring", "cs"),
-            playback_timeout_s=int(tts_cfg.get("playback_timeout_s", 15)),
+            playback_timeout_s=int(tts_cfg.get("playback_timeout_s", 20)),
         )
         
         # STT (Czech by default)
+        logger.info("Initializing Voice Input (STT)...")
         try:
             self.stt = SpeechToText(language="cs-CZ")
         except Exception as e:
@@ -95,6 +97,7 @@ class ClankerRobot:
             self.stt = None
         
         # Initialize subsystems
+        logger.info("Initializing Subsystems (Servos, Vision, Navigation)...")
         self.hexapod = HexapodController(
             self.servo_controller,
             coxa_length=self.config['servos']['coxa_length'],
@@ -107,6 +110,7 @@ class ClankerRobot:
         self.face_tracker = FaceTracker(simulation_mode=is_simulation)
         
         # Initialize AI brain
+        logger.info("Initializing AI Brain...")
         self.brain = RobotBrain(
             project_root=".",
             self_modify_enabled=self.config['ai']['self_modify_enabled'],

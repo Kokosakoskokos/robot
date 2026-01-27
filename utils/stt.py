@@ -29,10 +29,7 @@ class SpeechToText:
         
         try:
             self.microphone = sr.Microphone()
-            with self.microphone as source:
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            
-            # Start background listening
+            # Start background listening immediately WITHOUT blocking for noise adjustment
             self.stop_listening = self.recognizer.listen_in_background(self.microphone, self._callback)
             logger.info(f"Background STT initialized (lang={language})")
         except Exception as e:
