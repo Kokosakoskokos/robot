@@ -175,9 +175,19 @@ class RobotBrain:
             "environment": current_state.get("environment"),
         }
 
+        # SANITIZE: Convert any NumPy types to standard Python types for JSON
+        def sanitize(obj):
+            if isinstance(obj, dict):
+                return {k: sanitize(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [sanitize(i) for i in obj]
+            elif hasattr(obj, "item"): # Handle NumPy types
+                return obj.item()
+            return obj
+
         messages = [
             {"role": "system", "content": self._llm_system_prompt()},
-            {"role": "user", "content": json.dumps(state_brief)},
+            {"role": "user", "content": json.dumps(sanitize(state_brief))},
         ]
 
         try:
