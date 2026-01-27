@@ -101,13 +101,11 @@ class OpenRouterClient:
                     if "choices" in data:
                         content = data["choices"][0].get("message", {}).get("content")
                         # Handle models that wrap content in reasoning or think tags
-                        if model_name.endswith(":free") and "thinking" in model_name:
+                        if content and isinstance(content, str):
                             if "</thought>" in content:
                                 content = content.split("</thought>")[-1].strip()
                             elif "</think>" in content:
                                 content = content.split("</think>")[-1].strip()
-                        
-                        if isinstance(content, str):
                             return content.strip()
                     
                     raise RuntimeError(f"Invalid response shape from {model_name}")
