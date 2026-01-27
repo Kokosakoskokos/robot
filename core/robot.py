@@ -356,6 +356,9 @@ class ClankerRobot:
         self.update_state()
         
         # AI decision-making
+        if self.current_state.get('voice_command'):
+            logger.info(f"Clanker is thinking about: {self.current_state['voice_command']}...")
+            
         action = self.brain.think(self.current_state)
         
         # Execute action

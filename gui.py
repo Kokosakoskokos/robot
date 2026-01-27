@@ -145,7 +145,12 @@ class ClankerGUI:
             mode_str = self.robot.config.get('mode', 'sim').upper()
             self.lbl_mode.config(text=f"Mode: {mode_str}")
             self.lbl_heading.config(text=f"Heading: {self.robot.heading:.1f}°")
-            self.lbl_ai.config(text=f"AI Brain: {'ACTIVE' if self.robot.running else 'IDLE'}")
+            
+            # Show if thinking
+            if self.robot.current_state.get('voice_command'):
+                self.lbl_ai.config(text="AI Brain: THINKING...", foreground="orange")
+            else:
+                self.lbl_ai.config(text=f"AI Brain: {'ACTIVE' if self.robot.running else 'IDLE'}", foreground="black")
         except: pass
         self.root.after(500, self._update_status_loop)
 

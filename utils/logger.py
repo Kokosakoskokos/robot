@@ -2,6 +2,8 @@
 
 import logging
 import sys
+import os
+import ctypes
 from pathlib import Path
 from datetime import datetime
 
@@ -9,16 +11,15 @@ from datetime import datetime
 def setup_logger(name: str, log_file: str = "clanker.log", level: str = "INFO", console: bool = True) -> logging.Logger:
     """
     Set up a logger for the Clanker system.
-    
-    Args:
-        name: Logger name
-        log_file: Path to log file
-        level: Logging level (DEBUG, INFO, WARNING, ERROR)
-        console: Whether to output to console
-        
-    Returns:
-        Configured logger instance
     """
+    # Suppress ALSA/Jack noise globally on Linux
+    if os.name != 'nt':
+        try:
+            asound = ctypes.cdll.LoadLibrary('libasound.so.2')
+            asound.snd_lib_error_set_handler(None)
+        except:
+            pass
+
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
     

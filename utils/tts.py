@@ -110,7 +110,9 @@ class TextToSpeech:
                 for player in ['mpg123', 'play', 'aplay', 'cvlc']:
                     try:
                         if subprocess.run(['which', player], capture_output=True).returncode == 0:
-                            subprocess.run([player, temp_path], check=True)
+                            # Use -q for mpg123 to keep it quiet
+                            args = [player, "-q", temp_path] if player == "mpg123" else [player, temp_path]
+                            subprocess.run(args, check=True)
                             break
                     except:
                         continue
