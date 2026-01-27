@@ -53,7 +53,7 @@ ai:
     provider: "openrouter"
     
     openrouter:
-      model: "meta-llama/llama-3.1-8b-instruct:free"
+      model: "liquid/lfm-2.5-1.2b-instruct:free"
       base_url: "https://openrouter.ai/api/v1"
       
     edenai:
