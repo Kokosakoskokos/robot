@@ -147,8 +147,13 @@ class ClankerGUI:
             self.lbl_heading.config(text=f"Heading: {self.robot.heading:.1f}°")
             
             # Show if thinking
-            if self.robot.current_state.get('voice_command'):
+            if self.robot.current_state.get('_ai_error') == "RATE_LIMIT":
+                self.lbl_ai.config(text="AI Brain: RATE LIMIT (Wait)", foreground="red")
+            elif self.robot.current_state.get('voice_command'):
                 self.lbl_ai.config(text="AI Brain: THINKING...", foreground="orange")
+                # Clear error if we are thinking again
+                if '_ai_error' in self.robot.current_state:
+                    self.robot.current_state.pop('_ai_error')
             else:
                 self.lbl_ai.config(text=f"AI Brain: {'ACTIVE' if self.robot.running else 'IDLE'}", foreground="black")
         except: pass

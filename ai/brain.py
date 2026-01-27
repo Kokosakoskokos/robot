@@ -202,6 +202,12 @@ class RobotBrain:
             action["behavior"] = "llm"
             return action
         except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "Rate limit" in error_msg:
+                current_state['_ai_error'] = "RATE_LIMIT"
+                logger.error("OpenRouter Rate Limit reached. Please wait or add credits.")
+            else:
+                current_state['_ai_error'] = error_msg
             logger.warning(f"LLM decision failed; falling back to behaviors: {e}")
             return None
 
