@@ -179,10 +179,15 @@ class RobotBrain:
         def sanitize(obj):
             if isinstance(obj, dict):
                 return {k: sanitize(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
+            elif isinstance(obj, (list, tuple)):
                 return [sanitize(i) for i in obj]
-            elif hasattr(obj, "item"): # Handle NumPy types
+            elif hasattr(obj, "item") and callable(getattr(obj, "item")): # Handle NumPy types
                 return obj.item()
+            elif hasattr(obj, "dtype"): # Fallback for other NumPy-like objects
+                try:
+                    return obj.tolist() if hasattr(obj, "tolist") else float(obj)
+                except:
+                    return str(obj)
             return obj
 
         messages = [

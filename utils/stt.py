@@ -1,14 +1,27 @@
 """Speech-to-Text utility for Clanker Robot."""
 
 import speech_recognition as sr
+import os
+import sys
+import ctypes
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
+# Suppress ALSA/Jack error messages on Linux
+def suppress_alsa_errors():
+    if os.name != 'nt':
+        try:
+            asound = ctypes.cdll.LoadLibrary('libasound.so.2')
+            asound.snd_lib_error_set_handler(None)
+        except:
+            pass
 
 class SpeechToText:
     """Handles microphone input and converts it to text."""
     
     def __init__(self, language: str = "cs-CZ"):
+        suppress_alsa_errors()
         self.language = language
         self.recognizer = sr.Recognizer()
         self.microphone = None
