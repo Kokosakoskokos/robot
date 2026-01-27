@@ -81,18 +81,21 @@ class AvoidObstacleBehavior(Behavior):
     """Behavior for avoiding obstacles."""
     
     def __init__(self):
-        super().__init__("avoid_obstacle", priority=9)
+        super().__init__("avoid_obstacle", priority=6) # Lowered priority from 9 to 6
     
     def should_activate(self, state: Dict) -> bool:
-        """Activate if obstacles are detected nearby."""
+        """Activate if obstacles are detected nearby and no voice command is being processed."""
+        if state.get('voice_command'):
+            return False # Prioritize listening to the user
+            
         obstacles = state.get('obstacles', [])
         if not obstacles:
             return False
         
-        # Check if any obstacle is close
+        # Check if any obstacle is really close
         for obstacle in obstacles:
             distance = obstacle.get('distance_estimate', float('inf'))
-            if distance < 500:  # 50cm threshold
+            if distance < 300:  # 30cm threshold (was 50cm)
                 return True
         
         return False
