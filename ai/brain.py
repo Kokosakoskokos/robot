@@ -237,10 +237,26 @@ class RobotBrain:
         
         self._record_state(current_state)
         
+        # Check if we have an API key at all
+        if not self.llm_enabled:
+            logger.error("LLM is not enabled (missing API key?)")
+            if current_state.get('voice_command'):
+                return self._finalize_decision({
+                    'action': 'idle',
+                    'speech': 'Omlouvám se, ale nemám nastavený přístupový klíč ke svému digitálnímu mozku. Prosím, zkontroluj nastavení API.'
+                }, "error")
+
         # 1. Try LLM (Cloud AI) first
         action = self._think_with_llm(current_state)
         if action:
             return self._finalize_decision(action, "llm")
+
+        # Fallback speech if LLM failed but user said something
+        if current_state.get('voice_command'):
+            return self._finalize_decision({
+                'action': 'idle',
+                'speech': 'Zrovna se mi nedaří spojit se svým mozkem v cloudu, ale slyšel jsem tě!'
+            }, "fallback")
 
         # 2. Safety Fallback if LLM required
         if self.llm_required:

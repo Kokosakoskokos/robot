@@ -3,7 +3,18 @@
 
 import argparse
 import sys
+import os
+import ctypes
 from pathlib import Path
+
+# Suppress ALSA errors as early as possible
+if os.name != 'nt':
+    try:
+        asound = ctypes.cdll.LoadLibrary('libasound.so.2')
+        asound.snd_lib_error_set_handler(None)
+    except:
+        pass
+
 from core.robot import ClankerRobot
 from utils.logger import setup_logger
 
