@@ -50,7 +50,7 @@ ai:
     # If true, robot decisions REQUIRE the API. If the API fails, Clanker will fail-safe (stop)
     required: false
     # Choose provider: "openrouter" or "edenai"
-    provider: "edenai"
+    provider: "openrouter"
     
     openrouter:
       model: "google/gemini-2.0-flash-exp:free"
