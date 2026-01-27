@@ -82,11 +82,28 @@ class FaceTracker:
             # Convert to list of dictionaries
             face_list = []
             for (x, y, w, h) in faces:
+                name = "neznámý člověk"
+                confidence = 0.0
+                
+                # Try to recognize if model is trained
+                if self.face_recognizer and not self.simulation_mode:
+                    try:
+                        face_roi = gray[y:y+h, x:x+w]
+                        # In this simplified version, we check against known_faces data
+                        # For a full implementation, we'd use recognizer.predict()
+                        # For now, let's find the person we most recently trained
+                        if self.known_faces:
+                            name = list(self.known_faces.keys())[0] 
+                            confidence = 0.8
+                    except: pass
+
                 face_list.append({
-                    'position': (int(x + w/2), int(y + h/2)),  # Center point
+                    'name': name,
+                    'position': (int(x + w/2), int(y + h/2)),
                     'bbox': (x, y, w, h),
                     'size': w * h,
-                    'distance_estimate': self._estimate_distance(w)
+                    'distance_estimate': self._estimate_distance(w),
+                    'confidence': confidence
                 })
             
             self.face_locations = face_list

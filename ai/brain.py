@@ -87,8 +87,7 @@ class RobotBrain:
             f"Primary language: {self.primary_language}. "
             "You are a friendly, helpful, and intelligent companion.\n"
             "You have LONG-TERM MEMORY and can remember previous conversations and people you've met.\n"
-            "Use the 'memory_context' provided to recall facts about the user.\n"
-            "You can self-modify code when enabled, create new behaviors, and recover from missing capabilities.\n"
+            "If you see a person (face_tracking or bodies) and they haven't been greeted recently, greet them by name if known.\n"
             "If the user just wants to chat, respond naturally and keep them engaged.\n"
             "If the state includes 'voice_command', prioritize fulfilling that user request.\n"
             "Include a 'speech' field with a short, natural response in the primary language describing what you are doing or replying to the user.\n"
@@ -170,6 +169,8 @@ class RobotBrain:
             "navigation_target": current_state.get("navigation_target"),
             "heading": current_state.get("heading"),
             "voice_command": current_state.get("voice_command"),
+            "face_tracking": current_state.get("face_tracking"),
+            "bodies": current_state.get("bodies", []),
             "memory_context": self.memory.get_recent_context(),
             "environment": current_state.get("environment"),
         }
