@@ -27,7 +27,8 @@ logger = setup_logger(__name__)
 @dataclass
 class OpenRouterConfig:
     base_url: str = "https://openrouter.ai/api/v1"
-    model: str = "mistralai/devstral-small:free"
+    model: str = "google/gemini-2.0-flash-exp:free"
+    fallback_models: List[str] = None # List of backup models
     timeout_s: int = 20
     max_retries: int = 2
     temperature: float = 0.2
@@ -36,18 +37,14 @@ class OpenRouterConfig:
 
 
 class OpenRouterClient:
-    """Generic OpenAI-compatible LLM client (OpenRouter, Eden AI, etc.)."""
+    """Generic OpenAI-compatible LLM client with automatic model fallback."""
 
     def __init__(self, config: OpenRouterConfig, api_key: Optional[str] = None):
         self.config = config
-        # Try different environment variables for API key
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("EDENAI_API_KEY")
-        
-        # Allow optional metadata via env vars
-        if self.config.site_url is None:
-            self.config.site_url = os.getenv("OPENROUTER_SITE_URL")
-        if self.config.app_name is None:
-            self.config.app_name = os.getenv("OPENROUTER_APP_NAME")
+        self.all_models = [config.model]
+        if config.fallback_models:
+            self.all_models.extend(config.fallback_models)
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -57,7 +54,6 @@ class OpenRouterClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        # Optional OpenRouter-specific headers (don't hurt Eden AI)
         if self.config.site_url:
             headers["HTTP-Referer"] = self.config.site_url
         if self.config.app_name:
@@ -65,44 +61,50 @@ class OpenRouterClient:
         return headers
 
     def chat(self, messages: List[Dict[str, str]]) -> str:
-        """Send a chat request and return the assistant content as text."""
+        """Send a chat request with automatic fallback through the model list."""
         if not self.api_key:
-            raise RuntimeError("No API key found (tried OPENROUTER_API_KEY and EDENAI_API_KEY)")
-
-        url = f"{self.config.base_url.rstrip('/')}/chat/completions"
-        payload: Dict[str, Any] = {
-            "model": self.config.model,
-            "messages": messages,
-            "temperature": self.config.temperature,
-        }
+            raise RuntimeError("No API key found")
 
         last_err: Optional[Exception] = None
-        for attempt in range(self.config.max_retries + 1):
-            try:
-                resp = requests.post(
-                    url,
-                    headers=self._headers(),
-                    data=json.dumps(payload),
-                    timeout=self.config.timeout_s,
-                )
-                if resp.status_code >= 400:
-                    raise RuntimeError(f"LLM API HTTP {resp.status_code}: {resp.text[:400]}")
+        
+        # Try each model in the list
+        for model_name in self.all_models:
+            url = f"{self.config.base_url.rstrip('/')}/chat/completions"
+            payload: Dict[str, Any] = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": self.config.temperature,
+            }
 
-                data = resp.json()
-                # Handle standard OpenAI response format
-                if "choices" in data:
-                    choice = data["choices"][0]
-                    message = choice.get("message") or {}
-                    content = message.get("content")
-                    if isinstance(content, str):
-                        return content
-                
-                raise RuntimeError(f"Unexpected API response shape: {data}")
-            except Exception as e:
-                last_err = e
-                backoff = min(2.0, 0.25 * (2**attempt))
-                logger.warning(f"LLM API request failed (attempt {attempt + 1}): {e}")
-                time.sleep(backoff)
+            for attempt in range(self.config.max_retries + 1):
+                try:
+                    logger.info(f"Querying LLM: {model_name} (Attempt {attempt+1})")
+                    resp = requests.post(
+                        url,
+                        headers=self._headers(),
+                        data=json.dumps(payload),
+                        timeout=self.config.timeout_s,
+                    )
+                    
+                    if resp.status_code == 429:
+                        raise RuntimeError(f"Rate Limit on {model_name}")
+                    if resp.status_code >= 400:
+                        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
 
-        raise RuntimeError(f"LLM API request failed after retries: {last_err}")
+                    data = resp.json()
+                    if "choices" in data:
+                        content = data["choices"][0].get("message", {}).get("content")
+                        if isinstance(content, str):
+                            return content
+                    
+                    raise RuntimeError(f"Invalid response shape from {model_name}")
+                except Exception as e:
+                    last_err = e
+                    logger.warning(f"Request failed for {model_name}: {e}")
+                    if attempt < self.config.max_retries:
+                        time.sleep(0.5 * (2**attempt))
+            
+            logger.error(f"Model {model_name} exhausted, trying next model in fallback list...")
+
+        raise RuntimeError(f"All models failed. Last error: {last_err}")
 

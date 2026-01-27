@@ -78,6 +78,7 @@ class RobotBrain:
                     cfg = OpenRouterConfig(
                         base_url=str(provider_cfg.get("base_url", "https://openrouter.ai/api/v1")),
                         model=str(provider_cfg.get("model", "google/gemini-2.0-flash-exp:free")),
+                        fallback_models=provider_cfg.get("fallback_models", []),
                         timeout_s=int(llm_config.get("timeout_s", 30)),
                         max_retries=int(llm_config.get("max_retries", 3)),
                         temperature=float(llm_config.get("temperature", 0.2)),

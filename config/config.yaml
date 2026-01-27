@@ -55,6 +55,10 @@ ai:
     openrouter:
       model: "google/gemini-2.0-flash-exp:free"
       base_url: "https://openrouter.ai/api/v1"
+      fallback_models:
+        - "meta-llama/llama-3.1-8b-instruct:free"
+        - "mistralai/mistral-7b-instruct:free"
+        - "liquid/lfm-2.5-1.2b-instruct:free"
       
     edenai:
       # Format for Eden AI: "provider/model"
