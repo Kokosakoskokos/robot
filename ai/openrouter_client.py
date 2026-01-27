@@ -87,7 +87,9 @@ class OpenRouterClient:
                     )
                     
                     if resp.status_code == 429:
-                        raise RuntimeError(f"Rate Limit on {model_name}")
+                        logger.warning(f"Rate Limit on {model_name}, moving to fallback immediately.")
+                        break # Break retry loop, try NEXT model in fallback list
+                    
                     if resp.status_code >= 400:
                         raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
 
