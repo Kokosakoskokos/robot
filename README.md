@@ -1,5 +1,19 @@
 # Clanker - Autonomous Hexapod Robot System
 
+## AI Configuration (OpenRouter / Eden AI)
+
+Clanker can use **OpenRouter** or **Eden AI** for its intelligence. Set the environment variable for your provider:
+
+- **OpenRouter**: `export OPENROUTER_API_KEY="your_key"`
+- **Eden AI**: `export EDENAI_API_KEY="your_key"`
+
+You can choose the provider in `config/config.yaml`:
+```yaml
+ai:
+  llm:
+    provider: "edenai" # or "openrouter"
+```
+
 ## 🚀 Rychlá instalace (Raspberry Pi)
 Zkopírujte a vložte tento příkaz do terminálu pro kompletní stažení, nastavení systému a knihoven:
 ```bash

@@ -47,12 +47,17 @@ class RobotBrain:
             try:
                 enabled = bool(llm_config.get("enabled", False))
                 self.llm_required = bool(llm_config.get("required", False))
+                provider = str(llm_config.get("provider", "openrouter"))
+                
                 if enabled:
+                    # Select specific config based on provider
+                    provider_cfg = llm_config.get(provider, {})
+                    
                     cfg = OpenRouterConfig(
-                        base_url=str(llm_config.get("base_url", "https://openrouter.ai/api/v1")),
-                        model=str(llm_config.get("model", "mistralai/devstral-small:free")),
-                        timeout_s=int(llm_config.get("timeout_s", 20)),
-                        max_retries=int(llm_config.get("max_retries", 2)),
+                        base_url=str(provider_cfg.get("base_url", "https://openrouter.ai/api/v1")),
+                        model=str(provider_cfg.get("model", "google/gemini-2.0-flash-exp:free")),
+                        timeout_s=int(llm_config.get("timeout_s", 30)),
+                        max_retries=int(llm_config.get("max_retries", 3)),
                         temperature=float(llm_config.get("temperature", 0.2)),
                         site_url=llm_config.get("site_url"),
                         app_name=llm_config.get("app_name"),
@@ -61,14 +66,14 @@ class RobotBrain:
                     self.llm_enabled = self.openrouter.is_configured()
                     if enabled and not self.llm_enabled:
                         if self.llm_required:
-                            logger.warning("LLM is REQUIRED but OPENROUTER_API_KEY is not set; robot will fail-safe (stop).")
+                            logger.warning(f"LLM ({provider}) is REQUIRED but API KEY is not set; robot will fail-safe (stop).")
                         else:
-                            logger.warning("LLM enabled in config, but OPENROUTER_API_KEY is not set; using fallback behaviors.")
+                            logger.warning(f"LLM ({provider}) enabled in config, but API KEY is not set; using fallback behaviors.")
             except Exception as e:
                 if self.llm_required:
-                    logger.warning(f"Failed to initialize OpenRouter client; robot will fail-safe (stop): {e}")
+                    logger.warning(f"Failed to initialize LLM client; robot will fail-safe (stop): {e}")
                 else:
-                    logger.warning(f"Failed to initialize OpenRouter client; using fallback behaviors: {e}")
+                    logger.warning(f"Failed to initialize LLM client; using fallback behaviors: {e}")
 
         self.decision_interval = 0.5  # seconds
         self.last_decision_time = 0

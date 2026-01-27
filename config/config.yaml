@@ -44,21 +44,26 @@ ai:
   self_modify_enabled: true
   behavior_update_interval: 5.0  # seconds between behavior updates
   learning_rate: 0.1
-  # LLM (OpenRouter) configuration
+  # LLM (OpenRouter or Eden AI) configuration
   llm:
     enabled: true
     # If true, robot decisions REQUIRE the API. If the API fails, Clanker will fail-safe (stop)
     required: false
-    # Devstral (free tier) example. Change if you use a different model.
-    model: "liquid/lfm-2.5-1.2b-instruct:free"
-    # Optional; defaults to https://openrouter.ai/api/v1
-    base_url: "https://openrouter.ai/api/v1"
-    # Optional but recommended for OpenRouter analytics/rate-limits.
-    # site_url: "https://your-site.example"
-    # app_name: "Clanker"
+    # Choose provider: "openrouter" or "edenai"
+    provider: "edenai"
+    
+    openrouter:
+      model: "google/gemini-2.0-flash-exp:free"
+      base_url: "https://openrouter.ai/api/v1"
+      
+    edenai:
+      # Format for Eden AI: "provider/model" (e.g., "openai/gpt-4o-mini", "google/gemini-1.5-flash")
+      model: "openai/gpt-4o-mini"
+      base_url: "https://api.edenai.run/v3/openai"
+    
     # Safety/robustness
-    timeout_s: 20
-    max_retries: 2
+    timeout_s: 30
+    max_retries: 3
     temperature: 0.2
 
 # Text-to-Speech (TTS)

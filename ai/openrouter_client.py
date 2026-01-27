@@ -36,12 +36,14 @@ class OpenRouterConfig:
 
 
 class OpenRouterClient:
-    """Minimal OpenRouter chat-completions client."""
+    """Generic OpenAI-compatible LLM client (OpenRouter, Eden AI, etc.)."""
 
     def __init__(self, config: OpenRouterConfig, api_key: Optional[str] = None):
         self.config = config
-        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        # Allow optional metadata via env vars (nice for OpenRouter dashboards)
+        # Try different environment variables for API key
+        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("EDENAI_API_KEY")
+        
+        # Allow optional metadata via env vars
         if self.config.site_url is None:
             self.config.site_url = os.getenv("OPENROUTER_SITE_URL")
         if self.config.app_name is None:
@@ -55,7 +57,7 @@ class OpenRouterClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        # Optional OpenRouter headers
+        # Optional OpenRouter-specific headers (don't hurt Eden AI)
         if self.config.site_url:
             headers["HTTP-Referer"] = self.config.site_url
         if self.config.app_name:
@@ -65,7 +67,7 @@ class OpenRouterClient:
     def chat(self, messages: List[Dict[str, str]]) -> str:
         """Send a chat request and return the assistant content as text."""
         if not self.api_key:
-            raise RuntimeError("OPENROUTER_API_KEY is not set")
+            raise RuntimeError("No API key found (tried OPENROUTER_API_KEY and EDENAI_API_KEY)")
 
         url = f"{self.config.base_url.rstrip('/')}/chat/completions"
         payload: Dict[str, Any] = {
@@ -84,20 +86,23 @@ class OpenRouterClient:
                     timeout=self.config.timeout_s,
                 )
                 if resp.status_code >= 400:
-                    raise RuntimeError(f"OpenRouter HTTP {resp.status_code}: {resp.text[:400]}")
+                    raise RuntimeError(f"LLM API HTTP {resp.status_code}: {resp.text[:400]}")
 
                 data = resp.json()
-                choice = (data.get("choices") or [{}])[0]
-                message = choice.get("message") or {}
-                content = message.get("content")
-                if not isinstance(content, str):
-                    raise RuntimeError(f"Unexpected OpenRouter response shape: {data}")
-                return content
+                # Handle standard OpenAI response format
+                if "choices" in data:
+                    choice = data["choices"][0]
+                    message = choice.get("message") or {}
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        return content
+                
+                raise RuntimeError(f"Unexpected API response shape: {data}")
             except Exception as e:
                 last_err = e
                 backoff = min(2.0, 0.25 * (2**attempt))
-                logger.warning(f"OpenRouter request failed (attempt {attempt + 1}): {e}")
+                logger.warning(f"LLM API request failed (attempt {attempt + 1}): {e}")
                 time.sleep(backoff)
 
-        raise RuntimeError(f"OpenRouter request failed after retries: {last_err}")
+        raise RuntimeError(f"LLM API request failed after retries: {last_err}")
 
