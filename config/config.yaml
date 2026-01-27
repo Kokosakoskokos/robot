@@ -57,7 +57,8 @@ ai:
       base_url: "https://openrouter.ai/api/v1"
       
     edenai:
-      # Format for Eden AI: "provider/model" (e.g., "openai/gpt-4o-mini", "google/gemini-1.5-flash")
+      # Format for Eden AI: "provider/model"
+      # Try "openai/gpt-4o-mini" or "google/gemini-1.5-flash"
       model: "openai/gpt-4o-mini"
       base_url: "https://api.edenai.run/v3/openai"
     
