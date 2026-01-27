@@ -90,6 +90,10 @@ class OpenRouterClient:
                         logger.warning(f"Rate Limit on {model_name}, moving to fallback immediately.")
                         break # Break retry loop, try NEXT model in fallback list
                     
+                    if resp.status_code == 404:
+                        logger.warning(f"Model {model_name} not found (404), skipping.")
+                        break # Skip this model entirely
+                    
                     if resp.status_code >= 400:
                         raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
 
