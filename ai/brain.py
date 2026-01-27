@@ -50,9 +50,20 @@ class RobotBrain:
                 provider = str(llm_config.get("provider", "openrouter"))
                 
                 if enabled:
-                    # Select specific config based on provider
+                    # Select specific config and API KEY based on provider
                     provider_cfg = llm_config.get(provider, {})
                     
+                    # Force correct API key based on provider choice
+                    api_key = None
+                    if provider == "edenai":
+                        api_key = os.getenv("EDENAI_API_KEY")
+                    elif provider == "openrouter":
+                        api_key = os.getenv("OPENROUTER_API_KEY")
+                    
+                    # Fallback to any available key if specific one is missing
+                    if not api_key:
+                        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("EDENAI_API_KEY")
+
                     cfg = OpenRouterConfig(
                         base_url=str(provider_cfg.get("base_url", "https://openrouter.ai/api/v1")),
                         model=str(provider_cfg.get("model", "google/gemini-2.0-flash-exp:free")),
@@ -62,7 +73,7 @@ class RobotBrain:
                         site_url=llm_config.get("site_url"),
                         app_name=llm_config.get("app_name"),
                     )
-                    self.openrouter = OpenRouterClient(cfg)
+                    self.openrouter = OpenRouterClient(cfg, api_key=api_key)
                     self.llm_enabled = self.openrouter.is_configured()
                     if enabled and not self.llm_enabled:
                         if self.llm_required:
