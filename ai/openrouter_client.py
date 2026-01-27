@@ -106,6 +106,8 @@ class OpenRouterClient:
                                 content = content.split("</thought>")[-1].strip()
                             elif "</think>" in content:
                                 content = content.split("</think>")[-1].strip()
+                            elif "<think>" in content: # Handle unclosed think tag
+                                content = content.split("<think>")[-1].split("</think>")[-1].strip()
                             return content.strip()
                     
                     raise RuntimeError(f"Invalid response shape from {model_name}")
