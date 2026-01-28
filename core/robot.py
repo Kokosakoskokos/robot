@@ -371,7 +371,15 @@ class ClankerRobot:
         # Voice feedback
         if 'speech' in action and action['speech']:
             logger.info(f"Robot says: {action['speech']}")
+            # Stop listening while speaking to avoid self-triggering
+            if self.stt:
+                self.stt.active = False
+            
             self.tts.speak(action['speech'])
+            
+            # Resume listening after speaking
+            if self.stt:
+                self.stt.active = True
         
         # Periodic learning
         if self.brain.performance_metrics['decisions_made'] % 100 == 0:

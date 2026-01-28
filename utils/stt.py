@@ -18,7 +18,7 @@ def suppress_alsa_errors():
             pass
 
 class SpeechToText:
-    """Handles microphone input in the background."""
+    """Handles microphone input in the background with muting support."""
     
     def __init__(self, language: str = "cs-CZ"):
         suppress_alsa_errors()
@@ -26,19 +26,29 @@ class SpeechToText:
         self.recognizer = sr.Recognizer()
         self.microphone = None
         self.last_command = ""
+        self.active = True # Flag to temporarily stop processing
         
         try:
             self.microphone = sr.Microphone()
-            # Start background listening immediately WITHOUT blocking for noise adjustment
+            with self.microphone as source:
+                self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            
             self.stop_listening = self.recognizer.listen_in_background(self.microphone, self._callback)
             logger.info(f"Background STT initialized (lang={language})")
         except Exception as e:
             logger.warning(f"Microphone not available: {e}")
 
     def _callback(self, recognizer, audio):
-        """Called by background thread when audio is captured."""
+        """Called by background thread. Ignored if self.active is False."""
+        if not self.active:
+            return
+
         try:
             text = recognizer.recognize_google(audio, language=self.language)
+            # Filter out tiny noises (less than 3 chars)
+            if len(text.strip()) < 3:
+                return
+                
             logger.info(f"Recognized: {text}")
             self.last_command = text.lower()
         except sr.UnknownValueError:
