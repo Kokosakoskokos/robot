@@ -58,8 +58,8 @@ ai:
       fallback_models:
         - "upstage/solar-pro-3:free"
         - "liquid/lfm-2.5-1.2b-thinking:free"
+        - "liquid/lfm-2.5-1.2b-instruct:free"
         - "allenai/molmo-2-8b:free"
-        - "mistralai/mistral-7b-instruct:free"
       
     edenai:
       # Format for Eden AI: "provider/model"
@@ -70,7 +70,7 @@ ai:
     # Safety/robustness
     timeout_s: 30
     max_retries: 3
-    temperature: 0.2
+    temperature: 0.7
 
 # Text-to-Speech (TTS)
 tts:
