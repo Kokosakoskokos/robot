@@ -35,7 +35,7 @@ class RobotBrain:
         dotenv_path = Path(project_root) / ".env"
         load_dotenv(dotenv_path=dotenv_path)
         
-        # DEBUG: Check if key is loaded (only show first few chars)
+        # DEBUG: Check if key is loaded
         test_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("EDENAI_API_KEY")
         if test_key:
             logger.info(f"API Key successfully detected (starts with {test_key[:8]}...)")
@@ -48,6 +48,10 @@ class RobotBrain:
         self.robot_name = robot_name
         self.primary_language = primary_language
         
+        # Cooldown for greetings (to avoid repetitive "Ahoj")
+        self.last_greeting_time = 0
+        self.greeting_cooldown = 300 # 5 minutes
+
         if not self_modify_enabled:
             self.self_modifier.disable()
         
@@ -115,9 +119,10 @@ class RobotBrain:
             f"Primary language: {self.primary_language}. "
             "You are a friendly, helpful, and intelligent companion.\n"
             "You have LONG-TERM MEMORY and can remember previous conversations and people you've met.\n"
-            "If you see a person (face_tracking or bodies) and they haven't been greeted recently, greet them by name if known.\n"
+            "If 'should_greet' is True and you see a person, greet them by name if known. If 'should_greet' is False, do NOT greet them again.\n"
             "If the state includes 'voice_command', prioritize answering that specific question or command. Do NOT give a generic greeting if the user asked something else.\n"
             "Be conversational, vary your responses, and show your personality as Clanker.\n"
+            "NEVER repeat the exact same sentence twice in a row.\n"
             "Include a 'speech' field with a short, natural response in the primary language describing what you are doing or replying to the user.\n"
             "You must output ONLY a single JSON object describing the next action.\n"
             "Allowed actions and fields:\n"
@@ -187,11 +192,15 @@ class RobotBrain:
             # Not configured (missing key), but caller decides whether to fallback
             return None
 
+        # Determine if we should greet based on cooldown
+        should_greet = (time.time() - self.last_greeting_time) > self.greeting_cooldown
+
         # Keep prompt small + stable: only the fields the planner needs.
         state_brief = {
             "name": self.robot_name,
             "language": self.primary_language,
             "mode": current_state.get("mode"),
+            "should_greet": should_greet,
             "obstacles": current_state.get("obstacles", [])[:3],
             "navigation_info": current_state.get("navigation_info"),
             "navigation_target": current_state.get("navigation_target"),
@@ -225,12 +234,26 @@ class RobotBrain:
 
         try:
             content = self.openrouter.chat(messages)
+            if not content or not content.strip():
+                logger.warning("LLM returned empty content")
+                return None
+                
             parsed = json.loads(content.strip())
             action = self._sanitize_action(parsed)
             action["behavior"] = "llm"
+            
+            # Update greeting timestamp if AI actually spoke a greeting
+            if 'speech' in action and any(x in action['speech'].lower() for x in ["ahoj", "dobrý den", "vítám"]):
+                if should_greet:
+                    self.last_greeting_time = time.time()
+                    logger.info("Greeting cooldown started.")
+
             if 'speech' in action:
                 logger.info(f"AI Brain responded with speech: {action['speech']}")
             return action
+        except json.JSONDecodeError as je:
+            logger.warning(f"AI returned invalid JSON: {content[:100]}... Error: {je}")
+            return None
         except Exception as e:
             error_msg = str(e)
             if "429" in error_msg or "Rate limit" in error_msg:
