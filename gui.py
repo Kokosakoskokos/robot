@@ -17,8 +17,8 @@ class ClankerGUI:
         self.root.title("Clanker Robot Control Panel")
         self.root.geometry("1000x650")
         
-        # Use provided robot or create new one
-        self.robot = robot_instance or ClankerRobot(simulation_mode=True)
+        # Use provided robot or keep as None (will be set by main.py thread)
+        self.robot = robot_instance
         self.robot_thread = None
         self.running = False
         self.current_frame = None
