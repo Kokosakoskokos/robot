@@ -5,6 +5,7 @@ import argparse
 import sys
 import os
 import ctypes
+import threading
 from pathlib import Path
 
 # Suppress ALSA errors as early as possible
@@ -46,27 +47,34 @@ def main():
         args.simulation = True
     
     try:
-        # Initialize robot
-        robot = ClankerRobot(config_path=args.config, simulation_mode=args.simulation)
-
-        if args.say:
-            robot.tts.speak(args.say)
-            return
-
-        if args.cmd:
-            logger.info(f"Executing command: {args.cmd}")
-            robot.execute_action({'action': args.cmd})
-            return
-
         if args.gui:
             import tkinter as tk
             from gui import ClankerGUI
             logger.info("Launching Graphical User Interface...")
             root = tk.Tk()
-            # Pass existing robot instance to GUI
-            app = ClankerGUI(root, robot_instance=robot)
+            
+            # Create GUI with robot_instance=None first
+            # The GUI will handle starting the robot in a thread
+            app = ClankerGUI(root, robot_instance=None)
+            
+            # Helper to init robot in background so GUI is not blocked
+            def init_robot_task():
+                try:
+                    logger.info("Initializing Robot Hardware in background...")
+                    robot = ClankerRobot(config_path=args.config, simulation_mode=args.simulation)
+                    app.robot = robot
+                    logger.info("Robot Hardware Ready.")
+                except Exception as e:
+                    logger.error(f"Failed to init robot hardware: {e}")
+                    if hasattr(app, 'log'):
+                        app.log(f"CHYBA STARTU: {e}")
+
+            threading.Thread(target=init_robot_task, daemon=True).start()
             root.mainloop()
             return
+
+        # Normal terminal mode
+        robot = ClankerRobot(config_path=args.config, simulation_mode=args.simulation)
         
         if args.test:
             # Run test sequence

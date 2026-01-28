@@ -142,6 +142,11 @@ class ClankerGUI:
 
     def _update_status_loop(self):
         try:
+            if not self.robot or not hasattr(self.robot, 'config'):
+                self.lbl_ai.config(text="AI Brain: INITIALIZING HARDWARE...", foreground="blue")
+                self.root.after(1000, self._update_status_loop)
+                return
+
             mode_str = self.robot.config.get('mode', 'sim').upper()
             self.lbl_mode.config(text=f"Mode: {mode_str}")
             self.lbl_heading.config(text=f"Heading: {self.robot.heading:.1f}°")
@@ -156,11 +161,17 @@ class ClankerGUI:
                     self.robot.current_state.pop('_ai_error')
             else:
                 self.lbl_ai.config(text=f"AI Brain: {'ACTIVE' if self.robot.running else 'IDLE'}", foreground="black")
-        except: pass
+        except Exception as e:
+            logger.debug(f"Status loop error: {e}")
+        
         self.root.after(500, self._update_status_loop)
 
     def _update_video_loop(self):
         try:
+            if not self.robot or not hasattr(self.robot, 'vision'):
+                self.root.after(1000, self._update_video_loop)
+                return
+
             frame = self.robot.vision.capture_frame()
             
             if frame is None:
